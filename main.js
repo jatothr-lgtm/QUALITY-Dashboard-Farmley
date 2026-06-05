@@ -551,8 +551,10 @@ function renderMonthlyTrend() {
   const yMax = Math.ceil(Math.max(Math.max(...allVals), targetVal * 1.1) / 10) * 10;
   const range = (yMax - yMin) || 100;
   const scaleY = v => padT + chartH - ((v - yMin) / range) * chartH;
-  const stepX = months.length > 1 ? chartW / (months.length - 1) : chartW / 2;
-  const getX = i => months.length > 1 ? padL + i * stepX : padL + stepX;
+  
+  // Distribute groups within chartW, leaving margins on ends
+  const stepX = months.length > 0 ? chartW / months.length : chartW;
+  const getX = i => padL + (stepX / 2) + i * stepX;
 
   let paths = '';
 

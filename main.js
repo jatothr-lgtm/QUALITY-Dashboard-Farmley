@@ -464,6 +464,18 @@ function populateTrendPlantFilter() {
     sel.appendChild(opt);
   });
   sel.value = prev || "";
+
+  const rSel = document.getElementById("ranking-plant-select");
+  if (rSel) {
+    const rPrev = rSel.value;
+    while (rSel.options.length > 1) rSel.remove(1);
+    plants.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p; opt.textContent = p;
+      rSel.appendChild(opt);
+    });
+    rSel.value = rPrev || "";
+  }
 }
 
 function renderMonthlyTrend() {
@@ -709,12 +721,14 @@ function renderParameterComparison() {
 function renderRankingTrend() {
   const svg = document.getElementById("ranking-trend-chart");
   const sel = document.getElementById("ranking-param-select");
+  const plantSel = document.getElementById("ranking-plant-select");
   if (!svg || !sel) return;
 
   const W = 520, H = 280, padL = 40, padR = 20, padT = 30, padB = 45;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const key = sel.value;
+  const rankingPlant = plantSel ? plantSel.value : "";
 
   const rating = document.getElementById("filter-rating")?.value;
   const trendData = RAW_DATA.filter(r => {
@@ -775,9 +789,15 @@ function renderRankingTrend() {
     paths += `<text x="${padL - 8}" y="${y + 4}" fill="#64748b" font-size="10" text-anchor="end">#${r}</text>`;
   }
 
+  // Determine which plants to show
+  const plantsToShow = rankingPlant ? [rankingPlant] : plants;
+
   // Draw lines for each plant
-  plants.forEach((plant, pi) => {
-    const color = PLANT_COLORS[pi % PLANT_COLORS.length];
+  plantsToShow.forEach((plant, pi) => {
+    // If specific plant is selected, we want it to be clearly visible, maybe a distinct color,
+    // but we can just use the index of the plant in the overall list so colors remain consistent.
+    const overallIndex = plants.indexOf(plant);
+    const color = PLANT_COLORS[overallIndex % PLANT_COLORS.length];
     
     let d = '';
     let firstDrawn = true;
@@ -843,10 +863,17 @@ async function fetchFromSheet() {
 
   try {
     // Google Apps Script does a 302 redirect. We must follow it.
-    const response = await fetch(APPS_SCRIPT_URL, {
+    // Adding a cache buster to ensure we get fresh data every time.
+    const cacheBusterUrl = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 't=' + Date.now();
+    const response = await fetch(cacheBusterUrl, {
       method: 'GET',
       redirect: 'follow',
-      headers: { 'Accept': 'application/json' }
+      cache: 'no-store',
+      headers: { 
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
     });
 
     console.log('[Dashboard] Response status:', response.status, response.ok);

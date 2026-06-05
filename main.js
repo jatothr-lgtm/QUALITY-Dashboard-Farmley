@@ -3,7 +3,7 @@
    ===================================================================== */
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
 
-// Mock data as fallback
+// Mock data as fallback (includes month/year)
 const RAW_DATA = [
   { plant:"Indore",  gmp:89.6, complaints:40, rmir:21.52, rmad:3.36, training:100, unitsSold:3279891, complaintRate:12.2,  qualityScore:75.199, rating:"Good", month:"March", year:"2026" },
   { plant:"Purnia",  gmp:85.2, complaints:8,  rmir:0,     rmad:0,    training:50,  unitsSold:1331555, complaintRate:6.01,  qualityScore:65.002, rating:"Fair", month:"March", year:"2026" },
@@ -12,15 +12,23 @@ const RAW_DATA = [
   { plant:"Functional", gmp:85.2, complaints:0, rmir:0,   rmad:0,    training:50,  unitsSold:49320,   complaintRate:0,     qualityScore:63.8,   rating:"Fair", month:"March", year:"2026" },
   { plant:"Indore",  gmp:84.4, complaints:31, rmir:34.3, rmad:3.98, training:60, unitsSold:3867177, complaintRate:8.02, qualityScore:60.445, rating:"Fair", month:"April", year:"2026" },
   { plant:"Purnia",  gmp:81.8, complaints:14, rmir:0, rmad:0, training:100, unitsSold:1779823, complaintRate:7.87, qualityScore:77.023, rating:"Good", month:"April", year:"2026" },
-  { plant:"Indore",  gmp:76.2, complaints:44, rmir:28.48, rmad:1.13, training:100, unitsSold:4420132, complaintRate:9.95, qualityScore:60.445, rating:"Fair", month:"May", year:"2026" }
+  { plant:"Kundli",  gmp:85.2, complaints:0,  rmir:1.36, rmad:48.43, training:100, unitsSold:8140, complaintRate:0, qualityScore:71.185, rating:"Good", month:"April", year:"2026" },
+  { plant:"UD",      gmp:59,   complaints:3,  rmir:0, rmad:0, training:50, unitsSold:815385, complaintRate:3.68, qualityScore:57.986, rating:"Poor", month:"April", year:"2026" },
+  { plant:"Functional", gmp:90.7, complaints:0, rmir:0, rmad:0, training:100, unitsSold:38640, complaintRate:0, qualityScore:77.675, rating:"Good", month:"April", year:"2026" },
+  { plant:"Indore",  gmp:76.2, complaints:44, rmir:28.48, rmad:1.13, training:100, unitsSold:4420132, complaintRate:9.95, qualityScore:70.232, rating:"Good", month:"May", year:"2026" },
+  { plant:"Purnia",  gmp:82.4, complaints:8, rmir:0, rmad:0, training:100, unitsSold:1293468, complaintRate:6.18, qualityScore:76.837, rating:"Good", month:"May", year:"2026" },
+  { plant:"Kundli",  gmp:91.2, complaints:2, rmir:27.22, rmad:7.45, training:100, unitsSold:539366, complaintRate:3.71, qualityScore:72.353, rating:"Good", month:"May", year:"2026" },
+  { plant:"UD",      gmp:0, complaints:1, rmir:0, rmad:1, training:100, unitsSold:815884, complaintRate:1.23, qualityScore:55.145, rating:"Poor", month:"May", year:"2026" },
+  { plant:"Functional", gmp:94.5, complaints:1, rmir:0, rmad:0, training:100, unitsSold:240129, complaintRate:4.16, qualityScore:79.458, rating:"Good", month:"May", year:"2026" }
 ];
 
 const BENCHMARKS = {
-  gmp:        { target:90,  weight:0.25, label:"GMP %",                    higher:true,  unit:"%" },
-  complaintRate:{ target:15, weight:0.20, label:"Complaint Rate / Mn Packs", higher:false, unit:"" },
-  rmir:       { target:5,   weight:0.20, label:"RM Inward Rejection %",    higher:false, unit:"%" },
-  rmad:       { target:2,   weight:0.10, label:"RM Acceptance Deviation %", higher:false, unit:"%" },
-  training:   { target:100, weight:0.25, label:"Training Conducted %",     higher:true,  unit:"%" },
+  gmp:          { target:90,  weight:0.25, label:"GMP %",                    higher:true,  unit:"%" },
+  complaintRate:{ target:15,  weight:0.20, label:"Complaint Rate / Mn Packs", higher:false, unit:""  },
+  rmir:         { target:5,   weight:0.20, label:"RM Inward Rejection %",    higher:false, unit:"%" },
+  rmad:         { target:2,   weight:0.10, label:"RM Acceptance Deviation %", higher:false, unit:"%" },
+  training:     { target:100, weight:0.25, label:"Training Conducted %",     higher:true,  unit:"%" },
+  qualityScore: { target:70,  weight:1,    label:"Quality Score",            higher:true,  unit:"pts" }
 };
 
 const RATING_MAP = {
@@ -28,16 +36,16 @@ const RATING_MAP = {
 };
 const RATING_EMOJI = { Excellent:"🥇", "Very Good":"🥈", Good:"🥉", Fair:"⚠️", Poor:"🚨" };
 
-let filteredData = [...RAW_DATA];
+// Month ordering for correct chronological sort
+const MONTH_ORDER = { January:1, February:2, March:3, April:4, May:5, June:6, July:7, August:8, September:9, October:10, November:11, December:12 };
+
+let selectedMonth = null; // Will be set to latest month on init
+let filteredData = [];
 
 /* =====================================================================
    UTILITY
    ===================================================================== */
 function getRatingClass(r) { return RATING_MAP[r] || "fair"; }
-function getRatingColor(r) {
-  const m = { Excellent:"var(--excellent)", "Very Good":"var(--verygood)", Good:"var(--good)", Fair:"var(--fair)", Poor:"var(--poor)" };
-  return m[r] || "var(--fair)";
-}
 function scoreColor(s) {
   if (s >= 90) return "var(--excellent)";
   if (s >= 80) return "var(--verygood)";
@@ -56,8 +64,52 @@ function valClass(status) {
   return { excellent:"ok", good:"ok", warn:"warn", bad:"bad" }[status] || "warn";
 }
 function avg(arr, key) {
-  const valid = arr.filter(r => r[key] !== undefined);
+  const valid = arr.filter(r => r[key] !== undefined && r[key] !== null);
   return valid.length ? valid.reduce((s,r)=>s+r[key],0)/valid.length : 0;
+}
+
+function sortMonthsChronologically(monthYears) {
+  return monthYears.sort((a, b) => {
+    const [mA, yA] = a.split(' ');
+    const [mB, yB] = b.split(' ');
+    const yearDiff = parseInt(yA) - parseInt(yB);
+    if (yearDiff !== 0) return yearDiff;
+    return (MONTH_ORDER[mA] || 0) - (MONTH_ORDER[mB] || 0);
+  });
+}
+
+function getAvailableMonths() {
+  const monthYears = [...new Set(RAW_DATA.map(r => r.month && r.year ? `${r.month} ${r.year}` : null).filter(Boolean))];
+  return sortMonthsChronologically(monthYears);
+}
+
+/* =====================================================================
+   MONTH PILLS (replaces "All Time" dropdown)
+   ===================================================================== */
+function renderMonthPills() {
+  const container = document.getElementById("month-pills");
+  if (!container) return;
+
+  const months = getAvailableMonths();
+  if (months.length === 0) { container.innerHTML = '<span class="no-data">No data</span>'; return; }
+
+  // Default to latest month if not set
+  if (!selectedMonth || !months.includes(selectedMonth)) {
+    selectedMonth = months[months.length - 1];
+  }
+
+  container.innerHTML = months.map(m => `
+    <button class="month-pill ${m === selectedMonth ? 'active' : ''}" data-month="${m}">${m}</button>
+  `).join('');
+
+  container.querySelectorAll('.month-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedMonth = btn.dataset.month;
+      container.querySelectorAll('.month-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyFilters();
+    });
+  });
 }
 
 /* =====================================================================
@@ -65,9 +117,10 @@ function avg(arr, key) {
    ===================================================================== */
 function populateFilters() {
   const plantSel = document.getElementById("filter-plant");
-  const monthSel = document.getElementById("filter-month");
+  const ratingSel = document.getElementById("filter-rating");
 
   if (plantSel) {
+    const prev = plantSel.value;
     while (plantSel.options.length > 1) plantSel.remove(1);
     const plants = [...new Set(RAW_DATA.map(r => r.plant))].sort();
     plants.forEach(p => {
@@ -75,47 +128,40 @@ function populateFilters() {
       opt.value = p; opt.textContent = p;
       plantSel.appendChild(opt);
     });
+    plantSel.value = prev || "";
   }
 
-  if (monthSel) {
-    while (monthSel.options.length > 1) monthSel.remove(1);
-    const monthYears = [...new Set(RAW_DATA.map(r => r.month && r.year ? `${r.month} ${r.year}` : null).filter(Boolean))];
-    
-    // Sort chronologically
-    monthYears.sort((a, b) => new Date(a) - new Date(b));
-
-    monthYears.forEach(my => {
-      const opt = document.createElement("option");
-      opt.value = my; opt.textContent = my;
-      monthSel.appendChild(opt);
+  if (ratingSel) {
+    const prev = ratingSel.value;
+    while (ratingSel.options.length > 1) ratingSel.remove(1);
+    const ratings = [...new Set(RAW_DATA.map(r => r.rating).filter(Boolean))];
+    ["Excellent","Very Good","Good","Fair","Poor"].forEach(r => {
+      if (ratings.includes(r)) {
+        const opt = document.createElement("option");
+        opt.value = r; opt.textContent = r;
+        ratingSel.appendChild(opt);
+      }
     });
-
-    // Default to the latest month if no value is set
-    if (monthYears.length > 0 && monthSel.selectedOptions.length <= 1 && monthSel.value === "") {
-      monthSel.value = monthYears[monthYears.length - 1];
-    }
+    ratingSel.value = prev || "";
   }
+
+  renderMonthPills();
 }
 
 function applyFilters() {
-  const plant    = document.getElementById("filter-plant")?.value;
-  const monthSel = document.getElementById("filter-month");
-  const monthYrs = Array.from(monthSel?.selectedOptions || []).map(o => o.value).filter(v => v !== "");
-  const hasAllTime = monthSel?.selectedOptions[0]?.value === "" && monthYrs.length === 0;
-
-  const gmpMin   = parseFloat(document.getElementById("filter-gmp")?.value) || 0;
-  const cmpMax   = parseFloat(document.getElementById("filter-complaint")?.value);
-  const rmirMax  = parseFloat(document.getElementById("filter-rmir")?.value);
-  const rmadMax  = parseFloat(document.getElementById("filter-rmad")?.value);
+  const plant   = document.getElementById("filter-plant")?.value;
+  const rating  = document.getElementById("filter-rating")?.value;
+  const gmpMin  = parseFloat(document.getElementById("filter-gmp")?.value) || 0;
+  const cmpMax  = parseFloat(document.getElementById("filter-complaint")?.value);
+  const rmirMax = parseFloat(document.getElementById("filter-rmir")?.value);
+  const rmadMax = parseFloat(document.getElementById("filter-rmad")?.value);
   const trainMin = parseFloat(document.getElementById("filter-training")?.value) || 0;
 
   filteredData = RAW_DATA.filter(r => {
+    // Month filter
+    if (selectedMonth && `${r.month} ${r.year}` !== selectedMonth) return false;
     if (plant && r.plant !== plant) return false;
-    
-    if (!hasAllTime && monthYrs.length > 0) {
-      if (!monthYrs.includes(`${r.month} ${r.year}`)) return false;
-    }
-
+    if (rating && r.rating !== rating) return false;
     if (r.gmp < gmpMin) return false;
     if (!isNaN(cmpMax) && r.complaintRate > cmpMax) return false;
     if (!isNaN(rmirMax) && r.rmir > rmirMax) return false;
@@ -123,15 +169,18 @@ function applyFilters() {
     if (r.training < trainMin) return false;
     return true;
   });
+
+  // Update period label
+  document.getElementById("period-label").textContent = selectedMonth || "All Time";
+
   renderAll();
 }
 
 window.resetFilters = function() {
   document.getElementById("filter-plant").value = "";
-  document.getElementById("filter-month").value = "";
+  document.getElementById("filter-rating").value = "";
   ["filter-gmp","filter-complaint","filter-rmir","filter-rmad","filter-training"].forEach(id => document.getElementById(id).value = "");
-  filteredData = [...RAW_DATA];
-  renderAll();
+  applyFilters();
 };
 
 /* =====================================================================
@@ -156,9 +205,9 @@ function renderKPIOverview() {
     { label:"Avg Complaint Rate", value: avgCmp.toFixed(1), unit:"/Mn", target:"Target: ≤15",
       delta: avgCmp <= 15 ? "✓ In Control" : `▲ ${(avgCmp-15).toFixed(1)} over`,
       cls: avgCmp <= 15 ? "delta-good" : "delta-warn", color: avgCmp <= 15 ? "var(--excellent)" : "var(--warn)" },
-    { label:"Avg RM Inward Rej %", value: avg(filteredData,"rmir").toFixed(1), unit:"%", target:"Target: ≤5%",
-      delta: avg(filteredData,"rmir") <= 5 ? "✓ In Control" : "▲ High",
-      cls: avg(filteredData,"rmir") <= 5 ? "delta-good" : "delta-bad", color: avg(filteredData,"rmir") <= 5 ? "var(--excellent)" : "var(--danger)" },
+    { label:"Avg RM Inward Rej %", value: avgRMIR.toFixed(1), unit:"%", target:"Target: ≤5%",
+      delta: avgRMIR <= 5 ? "✓ In Control" : "▲ High",
+      cls: avgRMIR <= 5 ? "delta-good" : "delta-bad", color: avgRMIR <= 5 ? "var(--excellent)" : "var(--danger)" },
     { label:"Avg Training %", value: avgTrain.toFixed(0), unit:"%", target:"Target: 100%",
       delta: avgTrain === 100 ? "✓ Complete" : `▼ ${(100-avgTrain).toFixed(0)}% gap`,
       cls: avgTrain === 100 ? "delta-good" : avgTrain >= 70 ? "delta-warn" : "delta-bad", color: avgTrain === 100 ? "var(--excellent)" : "var(--warn)" },
@@ -193,7 +242,7 @@ function renderRankings() {
     <div class="rank-card ${rankCls}">
       <div class="rank-number">${rank}</div>
       <div class="rank-badge badge-${getRatingClass(r.rating)}">${RATING_EMOJI[r.rating] || ''} ${r.rating}</div>
-      <div class="plant-name">${r.plant} <span style="font-size:11px;color:var(--muted);font-weight:normal">${r.month?r.month:''}</span></div>
+      <div class="plant-name">${r.plant}</div>
       <div class="quality-score" style="color:${color}">${r.qualityScore.toFixed(1)} <span>/ 100</span></div>
       <div class="gauge-wrap">
         <div class="gauge-bar">
@@ -207,7 +256,7 @@ function renderRankings() {
         </div>
         <div class="kpi-mini">
           <div class="kpi-label">Complaint Rate</div>
-          <div class="kpi-val ${valClass(cmpSt)}">${r.complaintRate}</div>
+          <div class="kpi-val ${valClass(cmpSt)}">${r.complaintRate.toFixed(1)}</div>
         </div>
         <div class="kpi-mini">
           <div class="kpi-label">RM Inward Rej</div>
@@ -259,31 +308,24 @@ function renderScoreBarChart() {
   const svg = document.getElementById("score-bar-chart");
   if (!svg) return;
   const sorted = [...filteredData].sort((a,b)=>b.qualityScore-a.qualityScore);
+  if (sorted.length === 0) { svg.innerHTML = `<text x="230" y="130" fill="#64748b" font-size="12" text-anchor="middle">No data</text>`; return; }
   const W = 460, H = 260, padL = 70, padR = 20, padT = 20, padB = 30;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const barW = Math.min(50, (chartW / sorted.length) - 10);
-
-  const maxScore = 100;
-  const minScore = 50;
-  const range = maxScore - minScore;
+  const maxScore = 100, minScore = 50, range = maxScore - minScore;
   const scaleY = v => padT + chartH - ((v - minScore) / range) * chartH;
 
   let paths = '';
-
-  // Grid lines
   [60, 70, 80, 90, 100].forEach(v => {
     const y = scaleY(v);
     paths += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#1f2d45" stroke-width="1"/>`;
     paths += `<text x="${padL - 8}" y="${y + 4}" fill="#64748b" font-size="10" text-anchor="end">${v}</text>`;
   });
-
-  // Target line at 70
   const ty = scaleY(70);
   paths += `<line x1="${padL}" y1="${ty}" x2="${W-padR}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 3"/>`;
   paths += `<text x="${W-padR+4}" y="${ty+4}" fill="#f59e0b" font-size="9">Target</text>`;
 
-  // Bars
   const step = chartW / sorted.length;
   sorted.forEach((r, i) => {
     const x = padL + i * step + (step - barW) / 2;
@@ -292,10 +334,8 @@ function renderScoreBarChart() {
     const color = scoreColor(r.qualityScore);
     paths += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="4" fill="${color}" opacity="0.85"/>`;
     paths += `<text x="${x + barW/2}" y="${y - 5}" fill="${color}" font-size="10" text-anchor="middle" font-weight="600">${r.qualityScore.toFixed(1)}</text>`;
-    const labelY = H - padB + 14;
-    paths += `<text x="${x + barW/2}" y="${labelY}" fill="#94a3b8" font-size="10" text-anchor="middle">${r.plant}</text>`;
+    paths += `<text x="${x + barW/2}" y="${H - padB + 14}" fill="#94a3b8" font-size="10" text-anchor="middle">${r.plant}</text>`;
   });
-
   svg.innerHTML = paths;
 }
 
@@ -318,7 +358,7 @@ function renderHeatmap() {
   </tr></thead><tbody>`;
 
   sorted.forEach(r => {
-    html += `<tr><td class="plant-name-cell">${r.plant} <span style="font-size:9px;color:var(--muted);font-weight:normal"><br>${r.month?r.month:''}</span></td>`;
+    html += `<tr><td class="plant-name-cell">${r.plant}</td>`;
     const sc = kpiStatus(r.qualityScore, 70, true);
     html += `<td class="${cellClass(sc)}">${r.qualityScore.toFixed(1)}</td>`;
     kpis.forEach(k => {
@@ -352,7 +392,7 @@ function renderInsights() {
 
   const gmpFail = filteredData.filter(r => r.gmp < 90);
   if (gmpFail.length > 0) {
-    const worst = gmpFail.sort((a,b)=>a.gmp-b.gmp)[0];
+    const worst = [...gmpFail].sort((a,b)=>a.gmp-b.gmp)[0];
     insights.push({ icon:"🏭", bg:"danger-bg", title:`GMP Alert: ${worst.plant}`, text:`${gmpFail.length} plant(s) below 90% target.` });
   }
 
@@ -372,7 +412,7 @@ function renderDataTable() {
   const sorted = [...filteredData].sort((a,b)=>b.qualityScore-a.qualityScore);
 
   let html = `<thead><tr>
-    <th>#</th><th>Plant</th><th>Month</th><th>GMP %</th><th>Complaints</th>
+    <th>#</th><th>Plant</th><th>Month</th><th>Year</th><th>GMP %</th><th>Complaints</th>
     <th>Units Sold</th><th>Complaint Rate/Mn</th><th>RM Inward Rej %</th>
     <th>RM Accept Dev %</th><th>Training %</th><th>Quality Score</th><th>Rating</th>
   </tr></thead><tbody>`;
@@ -390,10 +430,11 @@ function renderDataTable() {
       <td style="color:var(--muted);font-weight:700">${i+1}</td>
       <td style="font-weight:700">${r.plant}</td>
       <td style="color:var(--muted)">${r.month || ''}</td>
+      <td style="color:var(--muted)">${r.year || ''}</td>
       <td style="color:${r.gmp>=90?'var(--excellent)':'var(--danger)'}">${r.gmp}%</td>
       <td>${r.complaints}</td>
       <td>${r.unitsSold.toLocaleString()}</td>
-      <td style="color:${r.complaintRate<=15?'var(--excellent)':'var(--danger)'}">${r.complaintRate}</td>
+      <td style="color:${r.complaintRate<=15?'var(--excellent)':'var(--danger)'}">${typeof r.complaintRate === 'number' ? r.complaintRate.toFixed(2) : r.complaintRate}</td>
       <td style="color:${r.rmir<=5?'var(--excellent)':'var(--danger)'}">${r.rmir}%</td>
       <td style="color:${r.rmad<=2?'var(--excellent)':'var(--danger)'}">${r.rmad}%</td>
       <td style="color:${r.training===100?'var(--excellent)':'var(--warn)'}">${r.training}%</td>
@@ -406,164 +447,177 @@ function renderDataTable() {
   el.innerHTML = html;
 }
 
+/* =====================================================================
+   MONTHLY TREND CHART — uses ALL months regardless of month filter
+   ===================================================================== */
 function renderMonthlyTrend() {
   const svg = document.getElementById("monthly-trend-chart");
-  const paramSel = document.getElementById("param-compare-select");
-  const subtitle = document.getElementById("monthly-trend-subtitle");
-  
+  const paramSel = document.getElementById("trend-param-select");
   if (!svg || !paramSel) return;
-  const W = 460, H = 260, padL = 40, padR = 20, padT = 20, padB = 40;
+
+  const W = 520, H = 280, padL = 50, padR = 30, padT = 25, padB = 45;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
 
   const key = paramSel.value;
   const keyLabel = paramSel.options[paramSel.selectedIndex].text;
-  if (subtitle) subtitle.textContent = `${keyLabel} Over Time`;
 
-  // We need to filter data without the month filter so we can see the full trend line!
+  // Filter WITHOUT the month filter so we get the full timeline
   const plant = document.getElementById("filter-plant")?.value;
-  const gmpMin = parseFloat(document.getElementById("filter-gmp")?.value) || 0;
-  const cmpMax = parseFloat(document.getElementById("filter-complaint")?.value);
-  const rmirMax = parseFloat(document.getElementById("filter-rmir")?.value);
-  const rmadMax = parseFloat(document.getElementById("filter-rmad")?.value);
-  const trainMin = parseFloat(document.getElementById("filter-training")?.value) || 0;
+  const rating = document.getElementById("filter-rating")?.value;
 
-  const trendFilteredData = RAW_DATA.filter(r => {
+  const trendData = RAW_DATA.filter(r => {
     if (plant && r.plant !== plant) return false;
-    if (r.gmp < gmpMin) return false;
-    if (!isNaN(cmpMax) && r.complaintRate > cmpMax) return false;
-    if (!isNaN(rmirMax) && r.rmir > rmirMax) return false;
-    if (!isNaN(rmadMax) && r.rmad > rmadMax) return false;
-    if (r.training < trainMin) return false;
+    if (rating && r.rating !== rating) return false;
     return true;
   });
 
-  // Group trendFilteredData by month-year
+  // Group by month-year and calculate averages
   const monthGroups = {};
-  trendFilteredData.forEach(r => {
-    if(!r.month || !r.year) return;
+  trendData.forEach(r => {
+    if (!r.month || !r.year) return;
     const my = `${r.month} ${r.year}`;
-    if(!monthGroups[my]) monthGroups[my] = [];
-    monthGroups[my].push(r[key]);
+    if (!monthGroups[my]) monthGroups[my] = [];
+    monthGroups[my].push(r[key] || 0);
   });
 
-  const months = Object.keys(monthGroups).sort((a, b) => new Date(a) - new Date(b));
+  const months = sortMonthsChronologically(Object.keys(monthGroups));
   if (months.length === 0) {
-    svg.innerHTML = `<text x="${W/2}" y="${H/2}" fill="#64748b" font-size="12" text-anchor="middle">No month data available</text>`;
+    svg.innerHTML = `<text x="${W/2}" y="${H/2}" fill="#64748b" font-size="12" text-anchor="middle">No trend data available</text>`;
     return;
   }
 
-  const avgScores = months.map(m => monthGroups[m].reduce((a,b)=>a+b,0)/monthGroups[m].length);
-  
-  // Calculate dynamic range based on data and targets
-  const minVal = Math.min(...avgScores, 0);
-  const maxDataVal = Math.max(...avgScores);
-  const maxTargetVal = BENCHMARKS[key] ? BENCHMARKS[key].target * 1.1 : 100;
-  const maxVal = key === "qualityScore" || key === "gmp" || key === "training" ? 100 : Math.max(maxDataVal, maxTargetVal);
-  const range = (maxVal - minVal) || 100;
+  const avgVals = months.map(m => monthGroups[m].reduce((a,b) => a+b, 0) / monthGroups[m].length);
 
-  const scaleY = v => padT + chartH - ((v - minVal) / range) * chartH;
+  // Dynamic scale
+  const dataMin = Math.min(...avgVals);
+  const dataMax = Math.max(...avgVals);
+  const targetVal = BENCHMARKS[key] ? BENCHMARKS[key].target : 70;
+  const yMin = Math.floor(Math.min(dataMin, targetVal * 0.8) / 10) * 10;
+  const yMax = Math.ceil(Math.max(dataMax, targetVal * 1.1) / 10) * 10;
+  const range = (yMax - yMin) || 100;
+  const scaleY = v => padT + chartH - ((v - yMin) / range) * chartH;
   const stepX = months.length > 1 ? chartW / (months.length - 1) : chartW / 2;
 
   let paths = '';
 
   // Grid lines
-  const ticks = [minVal, minVal + range/2, maxVal];
-  ticks.forEach(v => {
+  const gridCount = 5;
+  for (let i = 0; i <= gridCount; i++) {
+    const v = yMin + (range / gridCount) * i;
     const y = scaleY(v);
     paths += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#1f2d45" stroke-width="1"/>`;
     paths += `<text x="${padL - 8}" y="${y + 4}" fill="#64748b" font-size="10" text-anchor="end">${Math.round(v)}</text>`;
-  });
-
-  // Target line
-  if (key === "qualityScore" || BENCHMARKS[key]) {
-    const targetVal = key === "qualityScore" ? 70 : BENCHMARKS[key].target;
-    const ty = scaleY(targetVal);
-    paths += `<line x1="${padL}" y1="${ty}" x2="${W-padR}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 3"/>`;
   }
 
-  // Draw Line
+  // Target line
+  const ty = scaleY(targetVal);
+  paths += `<line x1="${padL}" y1="${ty}" x2="${W-padR}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+  paths += `<text x="${W-padR+4}" y="${ty+4}" fill="#f59e0b" font-size="9">Target</text>`;
+
+  // Area fill
+  let areaD = `M ${padL + (months.length > 1 ? 0 : stepX)} ${scaleY(avgVals[0])} `;
+  months.forEach((m, i) => {
+    const x = months.length > 1 ? padL + i * stepX : padL + stepX;
+    const y = scaleY(avgVals[i]);
+    areaD += `L ${x} ${y} `;
+  });
+  const lastX = months.length > 1 ? padL + (months.length - 1) * stepX : padL + stepX;
+  const firstX = months.length > 1 ? padL : padL + stepX;
+  areaD += `L ${lastX} ${scaleY(yMin)} L ${firstX} ${scaleY(yMin)} Z`;
+  paths += `<path d="${areaD}" fill="url(#trendGradient)" opacity="0.3"/>`;
+
+  // Gradient definition
+  paths = `<defs><linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#10b981" stop-opacity="0"/></linearGradient></defs>` + paths;
+
+  // Line
   let d = '';
   months.forEach((m, i) => {
     const x = months.length > 1 ? padL + i * stepX : padL + stepX;
-    const y = scaleY(avgScores[i]);
+    const y = scaleY(avgVals[i]);
     d += (i === 0 ? 'M' : 'L') + ` ${x} ${y} `;
   });
+  paths += `<path d="${d}" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
 
-  if(months.length > 0 && d) {
-    paths += `<path d="${d}" fill="none" stroke="var(--excellent)" stroke-width="3"/>`;
-  }
-
-  // Draw points and labels
+  // Points + labels
   months.forEach((m, i) => {
     const x = months.length > 1 ? padL + i * stepX : padL + stepX;
-    const y = scaleY(avgScores[i]);
-    paths += `<circle cx="${x}" cy="${y}" r="5" fill="var(--surface)" stroke="var(--excellent)" stroke-width="2"/>`;
-    paths += `<text x="${x}" y="${y - 12}" fill="#f1f5f9" font-size="11" text-anchor="middle" font-weight="600">${avgScores[i].toFixed(1)}</text>`;
-    paths += `<text x="${x}" y="${H - padB + 20}" fill="#94a3b8" font-size="10" text-anchor="middle">${m.split(' ')[0]}</text>`;
+    const y = scaleY(avgVals[i]);
+    const isSelected = m === selectedMonth;
+    const r = isSelected ? 7 : 5;
+    const strokeW = isSelected ? 3 : 2;
+    paths += `<circle cx="${x}" cy="${y}" r="${r}" fill="${isSelected ? '#10b981' : 'var(--surface)'}" stroke="#10b981" stroke-width="${strokeW}"/>`;
+    paths += `<text x="${x}" y="${y - 14}" fill="#f1f5f9" font-size="11" text-anchor="middle" font-weight="700">${avgVals[i].toFixed(1)}</text>`;
+    paths += `<text x="${x}" y="${H - padB + 18}" fill="${isSelected ? '#f59e0b' : '#94a3b8'}" font-size="10" text-anchor="middle" font-weight="${isSelected ? '700' : '400'}">${m.split(' ')[0]}</text>`;
+    paths += `<text x="${x}" y="${H - padB + 30}" fill="#64748b" font-size="8" text-anchor="middle">${m.split(' ')[1]}</text>`;
   });
 
   svg.innerHTML = paths;
 }
 
+/* =====================================================================
+   PARAMETER COMPARISON BAR CHART
+   ===================================================================== */
 function renderParameterComparison() {
   const svg = document.getElementById("parameter-compare-chart");
   const sel = document.getElementById("param-compare-select");
   if (!svg || !sel) return;
 
   const key = sel.value;
-  const W = 460, H = 260, padL = 40, padR = 20, padT = 20, padB = 40;
+  const W = 520, H = 280, padL = 50, padR = 20, padT = 20, padB = 45;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
 
-  // We will compare plants. If "All Time" is selected, average across months.
   const plantGroups = {};
   filteredData.forEach(r => {
-    if(!plantGroups[r.plant]) plantGroups[r.plant] = [];
-    plantGroups[r.plant].push(r[key]);
+    if (!plantGroups[r.plant]) plantGroups[r.plant] = [];
+    plantGroups[r.plant].push(r[key] || 0);
   });
 
   const plants = Object.keys(plantGroups).sort();
-  if (plants.length === 0) return;
+  if (plants.length === 0) { svg.innerHTML = `<text x="${W/2}" y="${H/2}" fill="#64748b" font-size="12" text-anchor="middle">No data</text>`; return; }
 
   const avgVals = plants.map(p => plantGroups[p].reduce((a,b)=>a+b,0)/plantGroups[p].length);
-  const maxVal = Math.max(...avgVals, BENCHMARKS[key]?.target || 0) * 1.1 || 100;
-  const range = maxVal;
-  const scaleY = v => padT + chartH - (v / range) * chartH;
-  
-  const barW = Math.min(40, (chartW / plants.length) - 10);
+  const targetVal = BENCHMARKS[key] ? BENCHMARKS[key].target : null;
+  const maxVal = Math.max(...avgVals, targetVal || 0) * 1.15 || 100;
+  const scaleY = v => padT + chartH - (v / maxVal) * chartH;
+
+  const barW = Math.min(45, (chartW / plants.length) - 12);
   const stepX = chartW / plants.length;
 
   let paths = '';
 
   // Grid
-  [0, maxVal/2, maxVal].forEach(v => {
+  for (let i = 0; i <= 4; i++) {
+    const v = (maxVal / 4) * i;
     const y = scaleY(v);
     paths += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#1f2d45" stroke-width="1"/>`;
     paths += `<text x="${padL - 8}" y="${y + 4}" fill="#64748b" font-size="10" text-anchor="end">${Math.round(v)}</text>`;
-  });
-
-  // Target
-  if (BENCHMARKS[key]) {
-    const ty = scaleY(BENCHMARKS[key].target);
-    paths += `<line x1="${padL}" y1="${ty}" x2="${W-padR}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 3"/>`;
   }
 
+  // Target line
+  if (targetVal) {
+    const ty = scaleY(targetVal);
+    paths += `<line x1="${padL}" y1="${ty}" x2="${W-padR}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+    paths += `<text x="${W-padR+4}" y="${ty+4}" fill="#f59e0b" font-size="9">T:${targetVal}</text>`;
+  }
+
+  // Bars
+  const barColors = ["#3b82f6","#8b5cf6","#10b981","#f97316","#ef4444","#ec4899","#14b8a6"];
   plants.forEach((p, i) => {
     const x = padL + i * stepX + (stepX - barW) / 2;
     const y = scaleY(avgVals[i]);
     const barH = scaleY(0) - y;
-    
-    // Determine color based on target
-    let color = "var(--accent2)";
-    if(BENCHMARKS[key]) {
+
+    let color = barColors[i % barColors.length];
+    if (BENCHMARKS[key]) {
       const isGood = BENCHMARKS[key].higher ? avgVals[i] >= BENCHMARKS[key].target : avgVals[i] <= BENCHMARKS[key].target;
-      color = isGood ? "var(--excellent)" : "var(--danger)";
+      color = isGood ? "#10b981" : "#ef4444";
     }
 
-    paths += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="4" fill="${color}" opacity="0.85"/>`;
-    paths += `<text x="${x + barW/2}" y="${y - 5}" fill="${color}" font-size="10" text-anchor="middle" font-weight="600">${avgVals[i].toFixed(1)}</text>`;
-    paths += `<text x="${x + barW/2}" y="${H - padB + 20}" fill="#94a3b8" font-size="9" text-anchor="middle" transform="rotate(-30 ${x + barW/2},${H - padB + 20})">${p}</text>`;
+    paths += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="5" fill="${color}" opacity="0.85"/>`;
+    paths += `<text x="${x + barW/2}" y="${y - 6}" fill="${color}" font-size="10" text-anchor="middle" font-weight="700">${avgVals[i].toFixed(1)}</text>`;
+    paths += `<text x="${x + barW/2}" y="${H - padB + 18}" fill="#94a3b8" font-size="10" text-anchor="middle">${p}</text>`;
   });
 
   svg.innerHTML = paths;
@@ -595,12 +649,10 @@ async function fetchFromSheet() {
     const response = await fetch(`${APPS_SCRIPT_URL}?action=getData`);
     const json = await response.json();
     if (json.data) {
-      // Update RAW_DATA array
       RAW_DATA.length = 0;
       json.data.forEach(d => RAW_DATA.push(d));
-      filteredData = [...RAW_DATA];
       populateFilters();
-      renderAll();
+      applyFilters();
     }
   } catch(e) {
     console.error('Failed to fetch sheet data:', e);
@@ -611,7 +663,7 @@ async function fetchFromSheet() {
    INIT
    ===================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
-  ["filter-plant","filter-month","filter-gmp","filter-complaint","filter-rmir","filter-rmad","filter-training"].forEach(id => {
+  ["filter-plant","filter-rating","filter-gmp","filter-complaint","filter-rmir","filter-rmad","filter-training"].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener("change", applyFilters);
@@ -619,15 +671,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  const trendParam = document.getElementById("trend-param-select");
+  if (trendParam) {
+    trendParam.addEventListener("change", () => { renderMonthlyTrend(); });
+  }
+
   const paramCompare = document.getElementById("param-compare-select");
-  if(paramCompare) {
-    paramCompare.addEventListener("change", renderParameterComparison);
+  if (paramCompare) {
+    paramCompare.addEventListener("change", () => { renderParameterComparison(); });
   }
 
   populateFilters();
-  renderAll();
+  applyFilters();
   fetchFromSheet();
-  
-  // Auto-refresh data every 60 seconds to keep dashboard live
+
+  // Auto-refresh every 60 seconds
   setInterval(fetchFromSheet, 60000);
 });

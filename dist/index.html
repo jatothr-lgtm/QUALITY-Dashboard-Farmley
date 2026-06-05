@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quality Dashboard — Farmley</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/assets/index-CwOIGzI1.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-fVVwt3sr.css">
+  <script type="module" crossorigin src="/assets/index-B2sViE0O.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-aI0tWsqW.css">
 </head>
 <body>
 
@@ -20,7 +20,7 @@
       </div>
     </div>
     <div class="header-meta">
-      <div class="period" id="period-label">March 2026</div>
+      <div class="period" id="period-label">—</div>
       <div class="updated">Last refreshed: <span id="refresh-time">—</span></div>
     </div>
   </header>
@@ -28,14 +28,14 @@
   <!-- ============ MAIN ============ -->
   <div class="main">
 
+    <!-- MONTH SELECTOR PILLS -->
+    <div class="month-selector-bar">
+      <div class="month-selector-label">📅 Select Month</div>
+      <div class="month-pills" id="month-pills"></div>
+    </div>
+
     <!-- FILTERS -->
     <div class="filter-bar">
-      <div class="filter-group">
-        <label>Month-Year (Ctrl+Click to multiselect)</label>
-        <select id="filter-month" multiple size="3" style="height: auto; max-height: 80px;">
-          <option value="">All Time</option>
-        </select>
-      </div>
       <div class="filter-group">
         <label>Plant</label>
         <select id="filter-plant">
@@ -43,11 +43,17 @@
         </select>
       </div>
       <div class="filter-group">
+        <label>Rating</label>
+        <select id="filter-rating">
+          <option value="">All Ratings</option>
+        </select>
+      </div>
+      <div class="filter-group">
         <label>GMP % (min)</label>
         <input type="number" id="filter-gmp" placeholder="0" min="0" max="100" step="0.1">
       </div>
       <div class="filter-group">
-        <label>Complaint Rate / Mn Packs (max)</label>
+        <label>Complaint Rate / Mn (max)</label>
         <input type="number" id="filter-complaint" placeholder="Any" min="0" step="0.1">
       </div>
       <div class="filter-group">
@@ -55,11 +61,11 @@
         <input type="number" id="filter-rmir" placeholder="Any" min="0" step="0.1">
       </div>
       <div class="filter-group">
-        <label>RM Acceptance Deviation % (max)</label>
+        <label>RM Accept Deviation % (max)</label>
         <input type="number" id="filter-rmad" placeholder="Any" min="0" step="0.1">
       </div>
       <div class="filter-group">
-        <label>Training Conducted % (min)</label>
+        <label>Training % (min)</label>
         <input type="number" id="filter-training" placeholder="0" min="0" max="100" step="1">
       </div>
       <button class="btn-reset" onclick="resetFilters()">↺ Reset</button>
@@ -75,7 +81,7 @@
       <div class="ranking-grid" id="ranking-grid"></div>
     </div>
 
-    <!-- CHARTS -->
+    <!-- CHARTS ROW 1 -->
     <div class="charts-grid">
       <div class="chart-card">
         <div class="chart-title">
@@ -93,19 +99,12 @@
       </div>
     </div>
 
-    <!-- NEW CHARTS: MONTHLY TREND & PARAMETER COMPARISON -->
-    <div class="charts-grid" style="margin-top: 32px;">
+    <!-- CHARTS ROW 2: MONTHLY TREND & PARAMETER COMPARISON -->
+    <div class="charts-grid">
       <div class="chart-card">
         <div class="chart-title">
-          Monthly Trend
-          <span class="chart-subtitle" id="monthly-trend-subtitle">Quality Score Over Time</span>
-        </div>
-        <svg id="monthly-trend-chart" width="100%" height="260" viewBox="0 0 460 260"></svg>
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">
-          Parameter Comparison
-          <select id="param-compare-select" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--surface2); color: var(--text); border: 1px solid var(--border);">
+          📈 Monthly Trend
+          <select id="trend-param-select" class="inline-select">
             <option value="qualityScore">Quality Score</option>
             <option value="gmp">GMP %</option>
             <option value="complaintRate">Complaint Rate</option>
@@ -114,7 +113,21 @@
             <option value="training">Training %</option>
           </select>
         </div>
-        <svg id="parameter-compare-chart" width="100%" height="260" viewBox="0 0 460 260"></svg>
+        <svg id="monthly-trend-chart" width="100%" height="280" viewBox="0 0 520 280"></svg>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">
+          🔬 Parameter Comparison
+          <select id="param-compare-select" class="inline-select">
+            <option value="qualityScore">Quality Score</option>
+            <option value="gmp">GMP %</option>
+            <option value="complaintRate">Complaint Rate</option>
+            <option value="rmir">RM Inward Rej %</option>
+            <option value="rmad">RM Accept Dev %</option>
+            <option value="training">Training %</option>
+          </select>
+        </div>
+        <svg id="parameter-compare-chart" width="100%" height="280" viewBox="0 0 520 280"></svg>
       </div>
     </div>
 

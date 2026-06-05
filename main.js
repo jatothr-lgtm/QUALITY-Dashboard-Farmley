@@ -448,56 +448,99 @@ function renderDataTable() {
 }
 
 /* =====================================================================
-   MONTHLY TREND CHART — uses ALL months regardless of month filter
+   MONTHLY TREND CHART — plant-wise with multi-line support
    ===================================================================== */
+const PLANT_COLORS = ["#10b981","#3b82f6","#f59e0b","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316"];
+
+function populateTrendPlantFilter() {
+  const sel = document.getElementById("trend-plant-select");
+  if (!sel) return;
+  const prev = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  const plants = [...new Set(RAW_DATA.map(r => r.plant))].sort();
+  plants.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p; opt.textContent = p;
+    sel.appendChild(opt);
+  });
+  sel.value = prev || "";
+}
+
 function renderMonthlyTrend() {
   const svg = document.getElementById("monthly-trend-chart");
   const paramSel = document.getElementById("trend-param-select");
+  const plantSel = document.getElementById("trend-plant-select");
   if (!svg || !paramSel) return;
 
-  const W = 520, H = 280, padL = 50, padR = 30, padT = 25, padB = 45;
+  const W = 900, H = 320, padL = 55, padR = 160, padT = 25, padB = 50;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
 
   const key = paramSel.value;
   const keyLabel = paramSel.options[paramSel.selectedIndex].text;
+  const trendPlant = plantSel ? plantSel.value : "";
 
-  // Filter WITHOUT the month filter so we get the full timeline
-  const plant = document.getElementById("filter-plant")?.value;
+  // Use all RAW_DATA (ignore month filter) but respect rating filter
   const rating = document.getElementById("filter-rating")?.value;
-
   const trendData = RAW_DATA.filter(r => {
-    if (plant && r.plant !== plant) return false;
     if (rating && r.rating !== rating) return false;
     return true;
   });
 
-  // Group by month-year and calculate averages
-  const monthGroups = {};
-  trendData.forEach(r => {
-    if (!r.month || !r.year) return;
-    const my = `${r.month} ${r.year}`;
-    if (!monthGroups[my]) monthGroups[my] = [];
-    monthGroups[my].push(r[key] || 0);
-  });
+  // Get all months sorted
+  const allMonthsSet = new Set();
+  trendData.forEach(r => { if (r.month && r.year) allMonthsSet.add(`${r.month} ${r.year}`); });
+  const months = sortMonthsChronologically([...allMonthsSet]);
 
-  const months = sortMonthsChronologically(Object.keys(monthGroups));
   if (months.length === 0) {
     svg.innerHTML = `<text x="${W/2}" y="${H/2}" fill="#64748b" font-size="12" text-anchor="middle">No trend data available</text>`;
     return;
   }
 
-  const avgVals = months.map(m => monthGroups[m].reduce((a,b) => a+b, 0) / monthGroups[m].length);
+  // Determine which plants to show
+  const plantsToShow = trendPlant
+    ? [trendPlant]
+    : [...new Set(trendData.map(r => r.plant))].sort();
+
+  // Build per-plant monthly data
+  const plantData = {};
+  plantsToShow.forEach(p => {
+    plantData[p] = {};
+    months.forEach(m => { plantData[p][m] = []; });
+  });
+  trendData.forEach(r => {
+    if (!r.month || !r.year) return;
+    const my = `${r.month} ${r.year}`;
+    if (plantData[r.plant] && plantData[r.plant][my]) {
+      plantData[r.plant][my].push(r[key] || 0);
+    }
+  });
+
+  // Calculate averages per plant per month
+  const plantAvgs = {};
+  let allVals = [];
+  plantsToShow.forEach(p => {
+    plantAvgs[p] = months.map(m => {
+      const vals = plantData[p][m];
+      const avg = vals.length > 0 ? vals.reduce((a,b) => a+b, 0) / vals.length : null;
+      if (avg !== null) allVals.push(avg);
+      return avg;
+    });
+  });
+
+  if (allVals.length === 0) {
+    svg.innerHTML = `<text x="${W/2}" y="${H/2}" fill="#64748b" font-size="12" text-anchor="middle">No data for selected filter</text>`;
+    return;
+  }
 
   // Dynamic scale
-  const dataMin = Math.min(...avgVals);
-  const dataMax = Math.max(...avgVals);
   const targetVal = BENCHMARKS[key] ? BENCHMARKS[key].target : 70;
-  const yMin = Math.floor(Math.min(dataMin, targetVal * 0.8) / 10) * 10;
-  const yMax = Math.ceil(Math.max(dataMax, targetVal * 1.1) / 10) * 10;
+  const yMin = Math.floor(Math.min(Math.min(...allVals), targetVal * 0.7) / 10) * 10;
+  const yMax = Math.ceil(Math.max(Math.max(...allVals), targetVal * 1.1) / 10) * 10;
   const range = (yMax - yMin) || 100;
   const scaleY = v => padT + chartH - ((v - yMin) / range) * chartH;
   const stepX = months.length > 1 ? chartW / (months.length - 1) : chartW / 2;
+  const getX = i => months.length > 1 ? padL + i * stepX : padL + stepX;
 
   let paths = '';
 
@@ -506,50 +549,87 @@ function renderMonthlyTrend() {
   for (let i = 0; i <= gridCount; i++) {
     const v = yMin + (range / gridCount) * i;
     const y = scaleY(v);
-    paths += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#1f2d45" stroke-width="1"/>`;
+    paths += `<line x1="${padL}" y1="${y}" x2="${padL + chartW}" y2="${y}" stroke="#1f2d45" stroke-width="1"/>`;
     paths += `<text x="${padL - 8}" y="${y + 4}" fill="#64748b" font-size="10" text-anchor="end">${Math.round(v)}</text>`;
   }
 
   // Target line
   const ty = scaleY(targetVal);
-  paths += `<line x1="${padL}" y1="${ty}" x2="${W-padR}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3"/>`;
-  paths += `<text x="${W-padR+4}" y="${ty+4}" fill="#f59e0b" font-size="9">Target</text>`;
+  paths += `<line x1="${padL}" y1="${ty}" x2="${padL + chartW}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+  paths += `<text x="${padL + chartW + 6}" y="${ty + 4}" fill="#f59e0b" font-size="9">Target ${targetVal}</text>`;
 
-  // Area fill
-  let areaD = `M ${padL + (months.length > 1 ? 0 : stepX)} ${scaleY(avgVals[0])} `;
-  months.forEach((m, i) => {
-    const x = months.length > 1 ? padL + i * stepX : padL + stepX;
-    const y = scaleY(avgVals[i]);
-    areaD += `L ${x} ${y} `;
+  // Gradient defs for single plant mode
+  let defs = '<defs>';
+  plantsToShow.forEach((p, pi) => {
+    const color = PLANT_COLORS[pi % PLANT_COLORS.length];
+    defs += `<linearGradient id="trendGrad${pi}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient>`;
   });
-  const lastX = months.length > 1 ? padL + (months.length - 1) * stepX : padL + stepX;
-  const firstX = months.length > 1 ? padL : padL + stepX;
-  areaD += `L ${lastX} ${scaleY(yMin)} L ${firstX} ${scaleY(yMin)} Z`;
-  paths += `<path d="${areaD}" fill="url(#trendGradient)" opacity="0.3"/>`;
+  defs += '</defs>';
+  paths = defs + paths;
 
-  // Gradient definition
-  paths = `<defs><linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#10b981" stop-opacity="0"/></linearGradient></defs>` + paths;
+  // Draw lines for each plant
+  plantsToShow.forEach((plant, pi) => {
+    const color = PLANT_COLORS[pi % PLANT_COLORS.length];
+    const avgs = plantAvgs[plant];
 
-  // Line
-  let d = '';
-  months.forEach((m, i) => {
-    const x = months.length > 1 ? padL + i * stepX : padL + stepX;
-    const y = scaleY(avgVals[i]);
-    d += (i === 0 ? 'M' : 'L') + ` ${x} ${y} `;
+    // Build line path (skip nulls)
+    let d = '';
+    let firstDrawn = true;
+    const drawnPoints = [];
+    months.forEach((m, i) => {
+      if (avgs[i] === null) return;
+      const x = getX(i);
+      const y = scaleY(avgs[i]);
+      d += (firstDrawn ? 'M' : 'L') + ` ${x} ${y} `;
+      firstDrawn = false;
+      drawnPoints.push({ x, y, val: avgs[i], month: m, idx: i });
+    });
+
+    if (drawnPoints.length === 0) return;
+
+    // Area fill (only in single plant mode)
+    if (plantsToShow.length === 1 && drawnPoints.length > 1) {
+      let areaD = `M ${drawnPoints[0].x} ${drawnPoints[0].y} `;
+      drawnPoints.forEach(pt => { areaD += `L ${pt.x} ${pt.y} `; });
+      areaD += `L ${drawnPoints[drawnPoints.length-1].x} ${scaleY(yMin)} L ${drawnPoints[0].x} ${scaleY(yMin)} Z`;
+      paths += `<path d="${areaD}" fill="url(#trendGrad${pi})" opacity="0.2"/>`;
+    }
+
+    // Line
+    paths += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${plantsToShow.length === 1 ? 3 : 2.5}" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+    // Points + value labels
+    drawnPoints.forEach(pt => {
+      const isSelected = pt.month === selectedMonth;
+      const r = isSelected ? 6 : 4;
+      paths += `<circle cx="${pt.x}" cy="${pt.y}" r="${r}" fill="${isSelected ? color : 'var(--surface)'}" stroke="${color}" stroke-width="2"/>`;
+      // Show labels only in single-plant mode or if few plants
+      if (plantsToShow.length <= 3) {
+        const labelOffset = pi * 14;
+        paths += `<text x="${pt.x}" y="${pt.y - 10 - labelOffset}" fill="${color}" font-size="10" text-anchor="middle" font-weight="700">${pt.val.toFixed(1)}</text>`;
+      }
+    });
   });
-  paths += `<path d="${d}" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
 
-  // Points + labels
+  // X-axis month labels
   months.forEach((m, i) => {
-    const x = months.length > 1 ? padL + i * stepX : padL + stepX;
-    const y = scaleY(avgVals[i]);
+    const x = getX(i);
     const isSelected = m === selectedMonth;
-    const r = isSelected ? 7 : 5;
-    const strokeW = isSelected ? 3 : 2;
-    paths += `<circle cx="${x}" cy="${y}" r="${r}" fill="${isSelected ? '#10b981' : 'var(--surface)'}" stroke="#10b981" stroke-width="${strokeW}"/>`;
-    paths += `<text x="${x}" y="${y - 14}" fill="#f1f5f9" font-size="11" text-anchor="middle" font-weight="700">${avgVals[i].toFixed(1)}</text>`;
     paths += `<text x="${x}" y="${H - padB + 18}" fill="${isSelected ? '#f59e0b' : '#94a3b8'}" font-size="10" text-anchor="middle" font-weight="${isSelected ? '700' : '400'}">${m.split(' ')[0]}</text>`;
     paths += `<text x="${x}" y="${H - padB + 30}" fill="#64748b" font-size="8" text-anchor="middle">${m.split(' ')[1]}</text>`;
+  });
+
+  // Legend (right side)
+  const legendX = padL + chartW + 20;
+  let legendY = padT + 20;
+  paths += `<text x="${legendX}" y="${legendY}" fill="#94a3b8" font-size="9" font-weight="700" text-transform="uppercase">${keyLabel}</text>`;
+  legendY += 18;
+  plantsToShow.forEach((p, pi) => {
+    const color = PLANT_COLORS[pi % PLANT_COLORS.length];
+    paths += `<line x1="${legendX}" y1="${legendY - 4}" x2="${legendX + 18}" y2="${legendY - 4}" stroke="${color}" stroke-width="3" stroke-linecap="round"/>`;
+    paths += `<circle cx="${legendX + 9}" cy="${legendY - 4}" r="3" fill="${color}"/>`;
+    paths += `<text x="${legendX + 24}" y="${legendY}" fill="#e2e8f0" font-size="11">${p}</text>`;
+    legendY += 20;
   });
 
   svg.innerHTML = paths;
@@ -705,6 +785,7 @@ async function fetchFromSheet() {
       // Reset selectedMonth so it gets re-detected as latest
       selectedMonth = null;
       populateFilters();
+      populateTrendPlantFilter();
       applyFilters();
     } else {
       console.warn('[Dashboard] No data array in response or empty. Keys:', Object.keys(json), 'data:', typeof dataArr);
@@ -731,12 +812,18 @@ document.addEventListener('DOMContentLoaded', () => {
     trendParam.addEventListener("change", () => { renderMonthlyTrend(); });
   }
 
+  const trendPlant = document.getElementById("trend-plant-select");
+  if (trendPlant) {
+    trendPlant.addEventListener("change", () => { renderMonthlyTrend(); });
+  }
+
   const paramCompare = document.getElementById("param-compare-select");
   if (paramCompare) {
     paramCompare.addEventListener("change", () => { renderParameterComparison(); });
   }
 
   populateFilters();
+  populateTrendPlantFilter();
   applyFilters();
   fetchFromSheet();
 

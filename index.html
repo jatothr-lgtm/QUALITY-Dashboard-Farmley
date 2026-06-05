@@ -30,8 +30,8 @@
     <!-- FILTERS -->
     <div class="filter-bar">
       <div class="filter-group">
-        <label>Month-Year</label>
-        <select id="filter-month">
+        <label>Month-Year (Ctrl+Click to multiselect)</label>
+        <select id="filter-month" multiple size="3" style="height: auto; max-height: 80px;">
           <option value="">All Time</option>
         </select>
       </div>
@@ -97,7 +97,7 @@
       <div class="chart-card">
         <div class="chart-title">
           Monthly Trend
-          <span class="chart-subtitle">Quality Score Over Time</span>
+          <span class="chart-subtitle" id="monthly-trend-subtitle">Quality Score Over Time</span>
         </div>
         <svg id="monthly-trend-chart" width="100%" height="260" viewBox="0 0 460 260"></svg>
       </div>
@@ -105,6 +105,7 @@
         <div class="chart-title">
           Parameter Comparison
           <select id="param-compare-select" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--surface2); color: var(--text); border: 1px solid var(--border);">
+            <option value="qualityScore">Quality Score</option>
             <option value="gmp">GMP %</option>
             <option value="complaintRate">Complaint Rate</option>
             <option value="rmir">RM Inward Rej %</option>

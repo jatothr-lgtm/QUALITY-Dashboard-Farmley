@@ -81,18 +81,28 @@ function populateFilters() {
     while (monthSel.options.length > 1) monthSel.remove(1);
     const monthYears = [...new Set(RAW_DATA.map(r => r.month && r.year ? `${r.month} ${r.year}` : null).filter(Boolean))];
     
-    // Sort months simply based on their appearance or parse them if needed, here just basic string sort or keeping order
+    // Sort chronologically
+    monthYears.sort((a, b) => new Date(a) - new Date(b));
+
     monthYears.forEach(my => {
       const opt = document.createElement("option");
       opt.value = my; opt.textContent = my;
       monthSel.appendChild(opt);
     });
+
+    // Default to the latest month if no value is set
+    if (monthYears.length > 0 && monthSel.selectedOptions.length <= 1 && monthSel.value === "") {
+      monthSel.value = monthYears[monthYears.length - 1];
+    }
   }
 }
 
 function applyFilters() {
   const plant    = document.getElementById("filter-plant")?.value;
-  const monthYr  = document.getElementById("filter-month")?.value;
+  const monthSel = document.getElementById("filter-month");
+  const monthYrs = Array.from(monthSel?.selectedOptions || []).map(o => o.value).filter(v => v !== "");
+  const hasAllTime = monthSel?.selectedOptions[0]?.value === "" && monthYrs.length === 0;
+
   const gmpMin   = parseFloat(document.getElementById("filter-gmp")?.value) || 0;
   const cmpMax   = parseFloat(document.getElementById("filter-complaint")?.value);
   const rmirMax  = parseFloat(document.getElementById("filter-rmir")?.value);
@@ -101,7 +111,11 @@ function applyFilters() {
 
   filteredData = RAW_DATA.filter(r => {
     if (plant && r.plant !== plant) return false;
-    if (monthYr && `${r.month} ${r.year}` !== monthYr) return false;
+    
+    if (!hasAllTime && monthYrs.length > 0) {
+      if (!monthYrs.includes(`${r.month} ${r.year}`)) return false;
+    }
+
     if (r.gmp < gmpMin) return false;
     if (!isNaN(cmpMax) && r.complaintRate > cmpMax) return false;
     if (!isNaN(rmirMax) && r.rmir > rmirMax) return false;
@@ -394,21 +408,46 @@ function renderDataTable() {
 
 function renderMonthlyTrend() {
   const svg = document.getElementById("monthly-trend-chart");
-  if (!svg) return;
+  const paramSel = document.getElementById("param-compare-select");
+  const subtitle = document.getElementById("monthly-trend-subtitle");
+  
+  if (!svg || !paramSel) return;
   const W = 460, H = 260, padL = 40, padR = 20, padT = 20, padB = 40;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
 
-  // Group filteredData by month-year
+  const key = paramSel.value;
+  const keyLabel = paramSel.options[paramSel.selectedIndex].text;
+  if (subtitle) subtitle.textContent = `${keyLabel} Over Time`;
+
+  // We need to filter data without the month filter so we can see the full trend line!
+  const plant = document.getElementById("filter-plant")?.value;
+  const gmpMin = parseFloat(document.getElementById("filter-gmp")?.value) || 0;
+  const cmpMax = parseFloat(document.getElementById("filter-complaint")?.value);
+  const rmirMax = parseFloat(document.getElementById("filter-rmir")?.value);
+  const rmadMax = parseFloat(document.getElementById("filter-rmad")?.value);
+  const trainMin = parseFloat(document.getElementById("filter-training")?.value) || 0;
+
+  const trendFilteredData = RAW_DATA.filter(r => {
+    if (plant && r.plant !== plant) return false;
+    if (r.gmp < gmpMin) return false;
+    if (!isNaN(cmpMax) && r.complaintRate > cmpMax) return false;
+    if (!isNaN(rmirMax) && r.rmir > rmirMax) return false;
+    if (!isNaN(rmadMax) && r.rmad > rmadMax) return false;
+    if (r.training < trainMin) return false;
+    return true;
+  });
+
+  // Group trendFilteredData by month-year
   const monthGroups = {};
-  filteredData.forEach(r => {
+  trendFilteredData.forEach(r => {
     if(!r.month || !r.year) return;
     const my = `${r.month} ${r.year}`;
     if(!monthGroups[my]) monthGroups[my] = [];
-    monthGroups[my].push(r.qualityScore);
+    monthGroups[my].push(r[key]);
   });
 
-  const months = Object.keys(monthGroups);
+  const months = Object.keys(monthGroups).sort((a, b) => new Date(a) - new Date(b));
   if (months.length === 0) {
     svg.innerHTML = `<text x="${W/2}" y="${H/2}" fill="#64748b" font-size="12" text-anchor="middle">No month data available</text>`;
     return;
@@ -416,22 +455,32 @@ function renderMonthlyTrend() {
 
   const avgScores = months.map(m => monthGroups[m].reduce((a,b)=>a+b,0)/monthGroups[m].length);
   
-  const minScore = 50, maxScore = 100, range = maxScore - minScore;
-  const scaleY = v => padT + chartH - ((v - minScore) / range) * chartH;
+  // Calculate dynamic range based on data and targets
+  const minVal = Math.min(...avgScores, 0);
+  const maxDataVal = Math.max(...avgScores);
+  const maxTargetVal = BENCHMARKS[key] ? BENCHMARKS[key].target * 1.1 : 100;
+  const maxVal = key === "qualityScore" || key === "gmp" || key === "training" ? 100 : Math.max(maxDataVal, maxTargetVal);
+  const range = (maxVal - minVal) || 100;
+
+  const scaleY = v => padT + chartH - ((v - minVal) / range) * chartH;
   const stepX = months.length > 1 ? chartW / (months.length - 1) : chartW / 2;
 
   let paths = '';
 
   // Grid lines
-  [60, 70, 80, 90, 100].forEach(v => {
+  const ticks = [minVal, minVal + range/2, maxVal];
+  ticks.forEach(v => {
     const y = scaleY(v);
     paths += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#1f2d45" stroke-width="1"/>`;
-    paths += `<text x="${padL - 8}" y="${y + 4}" fill="#64748b" font-size="10" text-anchor="end">${v}</text>`;
+    paths += `<text x="${padL - 8}" y="${y + 4}" fill="#64748b" font-size="10" text-anchor="end">${Math.round(v)}</text>`;
   });
 
   // Target line
-  const ty = scaleY(70);
-  paths += `<line x1="${padL}" y1="${ty}" x2="${W-padR}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  if (key === "qualityScore" || BENCHMARKS[key]) {
+    const targetVal = key === "qualityScore" ? 70 : BENCHMARKS[key].target;
+    const ty = scaleY(targetVal);
+    paths += `<line x1="${padL}" y1="${ty}" x2="${W-padR}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  }
 
   // Draw Line
   let d = '';

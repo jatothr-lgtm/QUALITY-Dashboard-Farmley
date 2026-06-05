@@ -641,21 +641,76 @@ function renderAll() {
    ===================================================================== */
 async function fetchFromSheet() {
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL') {
-    console.warn('No Apps Script URL provided. Using mock data.');
+    console.warn('No Apps Script URL configured. Using mock data.');
     return;
   }
 
+  console.log('[Dashboard] Fetching data from:', APPS_SCRIPT_URL);
+
   try {
-    const response = await fetch(`${APPS_SCRIPT_URL}?action=getData`);
-    const json = await response.json();
-    if (json.data) {
+    // Google Apps Script does a 302 redirect. We must follow it.
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'GET',
+      redirect: 'follow',
+      headers: { 'Accept': 'application/json' }
+    });
+
+    console.log('[Dashboard] Response status:', response.status, response.ok);
+
+    if (!response.ok) {
+      console.error('[Dashboard] HTTP error:', response.status, response.statusText);
+      return;
+    }
+
+    const text = await response.text();
+    console.log('[Dashboard] Response length:', text.length);
+
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (parseErr) {
+      console.error('[Dashboard] JSON parse error:', parseErr, 'Raw:', text.substring(0, 200));
+      return;
+    }
+
+    console.log('[Dashboard] Parsed JSON keys:', Object.keys(json));
+
+    // The API returns { status, data, benchmarks, ratings }
+    const dataArr = json.data;
+    if (dataArr && Array.isArray(dataArr) && dataArr.length > 0) {
+      console.log('[Dashboard] Loaded', dataArr.length, 'records. Sample:', JSON.stringify(dataArr[0]));
+
+      // Normalize data - ensure all expected fields exist
+      const normalized = dataArr.map(d => ({
+        plant:         String(d.plant || '').trim(),
+        gmp:           parseFloat(d.gmp) || 0,
+        complaints:    parseInt(d.complaints) || 0,
+        rmir:          parseFloat(d.rmir) || 0,
+        rmad:          parseFloat(d.rmad) || 0,
+        training:      parseFloat(d.training) || 0,
+        unitsSold:     parseInt(d.unitsSold) || 0,
+        complaintRate: parseFloat(d.complaintRate) || 0,
+        qualityScore:  parseFloat(d.qualityScore) || 0,
+        rating:        String(d.rating || 'Fair').trim(),
+        month:         String(d.month || '').trim(),
+        year:          String(d.year || '').trim()
+      })).filter(d => d.plant.length > 0);
+
+      console.log('[Dashboard] Normalized', normalized.length, 'records');
+      console.log('[Dashboard] Months found:', [...new Set(normalized.map(r => `${r.month} ${r.year}`))]);
+
       RAW_DATA.length = 0;
-      json.data.forEach(d => RAW_DATA.push(d));
+      normalized.forEach(d => RAW_DATA.push(d));
+      
+      // Reset selectedMonth so it gets re-detected as latest
+      selectedMonth = null;
       populateFilters();
       applyFilters();
+    } else {
+      console.warn('[Dashboard] No data array in response or empty. Keys:', Object.keys(json), 'data:', typeof dataArr);
     }
   } catch(e) {
-    console.error('Failed to fetch sheet data:', e);
+    console.error('[Dashboard] Fetch error:', e.message || e);
   }
 }
 

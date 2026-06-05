@@ -464,18 +464,6 @@ function populateTrendPlantFilter() {
     sel.appendChild(opt);
   });
   sel.value = prev || "";
-
-  const rSel = document.getElementById("ranking-plant-select");
-  if (rSel) {
-    const rPrev = rSel.value;
-    while (rSel.options.length > 1) rSel.remove(1);
-    plants.forEach(p => {
-      const opt = document.createElement("option");
-      opt.value = p; opt.textContent = p;
-      rSel.appendChild(opt);
-    });
-    rSel.value = rPrev || "";
-  }
 }
 
 function renderMonthlyTrend() {
@@ -547,7 +535,7 @@ function renderMonthlyTrend() {
 
   // Dynamic scale
   const targetVal = BENCHMARKS[key] ? BENCHMARKS[key].target : 70;
-  const yMin = Math.floor(Math.min(Math.min(...allVals), targetVal * 0.7) / 10) * 10;
+  const yMin = 0;
   const yMax = Math.ceil(Math.max(Math.max(...allVals), targetVal * 1.1) / 10) * 10;
   const range = (yMax - yMin) || 100;
   const scaleY = v => padT + chartH - ((v - yMin) / range) * chartH;
@@ -697,126 +685,6 @@ function renderParameterComparison() {
   svg.innerHTML = paths;
 }
 
-/* =====================================================================
-   RANKING TREND CHART
-   ===================================================================== */
-function renderRankingTrend() {
-  const svg = document.getElementById("ranking-trend-chart");
-  const sel = document.getElementById("ranking-param-select");
-  const plantSel = document.getElementById("ranking-plant-select");
-  if (!svg || !sel) return;
-
-  const W = 520, H = 280, padL = 40, padR = 20, padT = 30, padB = 45;
-  const chartW = W - padL - padR;
-  const chartH = H - padT - padB;
-  const key = sel.value;
-  const rankingPlant = plantSel ? plantSel.value : "";
-
-  const rating = document.getElementById("filter-rating")?.value;
-  const trendData = RAW_DATA.filter(r => {
-    if (rating && r.rating !== rating) return false;
-    return true;
-  });
-
-  // Get months
-  const allMonthsSet = new Set();
-  trendData.forEach(r => { if (r.month && r.year) allMonthsSet.add(`${r.month} ${r.year}`); });
-  const months = sortMonthsChronologically([...allMonthsSet]);
-
-  if (months.length === 0) {
-    svg.innerHTML = `<text x="${W/2}" y="${H/2}" fill="#64748b" font-size="12" text-anchor="middle">No data</text>`;
-    return;
-  }
-
-  const plants = [...new Set(trendData.map(r => r.plant))].sort();
-
-  // For each month, compute ranks
-  const monthRanks = {};
-  months.forEach(m => {
-    // get all records for this month
-    const mData = trendData.filter(r => `${r.month} ${r.year}` === m);
-    // group by plant to get average (in case of multiple rows)
-    const plantVals = plants.map(p => {
-      const pData = mData.filter(r => r.plant === p);
-      if (pData.length === 0) return { plant: p, val: null };
-      const avg = pData.reduce((a,b) => a+(b[key]||0), 0) / pData.length;
-      return { plant: p, val: avg };
-    });
-    
-    // sort to determine rank
-    const higherIsBetter = ["qualityScore", "gmp", "training"].includes(key);
-    
-    const validVals = plantVals.filter(pv => pv.val !== null);
-    validVals.sort((a,b) => higherIsBetter ? b.val - a.val : a.val - b.val);
-    
-    monthRanks[m] = {};
-    validVals.forEach((pv, idx) => {
-      monthRanks[m][pv.plant] = idx + 1; // Rank 1 is top
-    });
-  });
-
-  const stepX = months.length > 1 ? chartW / (months.length - 1) : chartW / 2;
-  const getX = i => months.length > 1 ? padL + i * stepX : padL + stepX;
-  const maxRank = Math.max(1, ...Object.values(monthRanks).reduce((acc, m) => acc.concat(Object.values(m)), []));
-  
-  // Y-axis inverted (1 at top, maxRank at bottom)
-  const scaleY = rank => padT + ((rank - 1) / Math.max(1, maxRank - 1)) * chartH;
-
-  let paths = '';
-
-  // Y-axis grid lines (Rank 1, 2, 3...)
-  for (let r = 1; r <= maxRank; r++) {
-    const y = scaleY(r);
-    paths += `<line x1="${padL}" y1="${y}" x2="${padL + chartW}" y2="${y}" stroke="#1f2d45" stroke-width="1"/>`;
-    paths += `<text x="${padL - 8}" y="${y + 4}" fill="#64748b" font-size="10" text-anchor="end">#${r}</text>`;
-  }
-
-  // Determine which plants to show
-  const plantsToShow = rankingPlant ? [rankingPlant] : plants;
-
-  // Draw lines for each plant
-  plantsToShow.forEach((plant, pi) => {
-    // If specific plant is selected, we want it to be clearly visible, maybe a distinct color,
-    // but we can just use the index of the plant in the overall list so colors remain consistent.
-    const overallIndex = plants.indexOf(plant);
-    const color = PLANT_COLORS[overallIndex % PLANT_COLORS.length];
-    
-    let d = '';
-    let firstDrawn = true;
-    const drawnPoints = [];
-    
-    months.forEach((m, i) => {
-      const rank = monthRanks[m][plant];
-      if (!rank) return;
-      const x = getX(i);
-      const y = scaleY(rank);
-      d += (firstDrawn ? 'M' : 'L') + ` ${x} ${y} `;
-      firstDrawn = false;
-      drawnPoints.push({ x, y, rank });
-    });
-
-    if (drawnPoints.length === 0) return;
-
-    // Line
-    paths += `<path d="${d}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
-
-    // Points
-    drawnPoints.forEach(pt => {
-      paths += `<circle cx="${pt.x}" cy="${pt.y}" r="6" fill="var(--surface)" stroke="${color}" stroke-width="2"/>`;
-      paths += `<text x="${pt.x}" y="${pt.y + 4}" fill="${color}" font-size="10" text-anchor="middle" font-weight="700">${pt.rank}</text>`;
-    });
-  });
-
-  // X-axis month labels
-  months.forEach((m, i) => {
-    const x = getX(i);
-    const isSelected = m === selectedMonth;
-    paths += `<text x="${x}" y="${H - padB + 20}" fill="${isSelected ? '#f59e0b' : '#94a3b8'}" font-size="10" text-anchor="middle" font-weight="${isSelected ? '700' : '400'}">${m.split(' ')[0]}</text>`;
-    paths += `<text x="${x}" y="${H - padB + 32}" fill="#64748b" font-size="8" text-anchor="middle">${m.split(' ')[1]}</text>`;
-  });
-
-  svg.innerHTML = paths;
-}
 
 function renderAll() {
   renderKPIOverview();
@@ -828,7 +696,6 @@ function renderAll() {
   renderDataTable();
   renderMonthlyTrend();
   renderParameterComparison();
-  renderRankingTrend();
   document.getElementById("refresh-time").textContent = new Date().toLocaleTimeString();
 }
 
@@ -945,10 +812,6 @@ document.addEventListener('DOMContentLoaded', () => {
     paramCompare.addEventListener("change", () => { renderParameterComparison(); });
   }
 
-  const rankingParam = document.getElementById("ranking-param-select");
-  if (rankingParam) {
-    rankingParam.addEventListener("change", () => { renderRankingTrend(); });
-  }
 
   populateFilters();
   populateTrendPlantFilter();

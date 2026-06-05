@@ -775,7 +775,7 @@ function renderRankingTrend() {
 
   const stepX = months.length > 1 ? chartW / (months.length - 1) : chartW / 2;
   const getX = i => months.length > 1 ? padL + i * stepX : padL + stepX;
-  const maxRank = Math.max(1, ...Object.values(monthRanks).flatMap(m => Object.values(m)));
+  const maxRank = Math.max(1, ...Object.values(monthRanks).reduce((acc, m) => acc.concat(Object.values(m)), []));
   
   // Y-axis inverted (1 at top, maxRank at bottom)
   const scaleY = rank => padT + ((rank - 1) / Math.max(1, maxRank - 1)) * chartH;

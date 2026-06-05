@@ -570,55 +570,35 @@ function renderMonthlyTrend() {
   paths += `<line x1="${padL}" y1="${ty}" x2="${padL + chartW}" y2="${ty}" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3"/>`;
   paths += `<text x="${padL + chartW + 6}" y="${ty + 4}" fill="#f59e0b" font-size="9">Target ${targetVal}</text>`;
 
-  // Gradient defs for single plant mode
-  let defs = '<defs>';
-  plantsToShow.forEach((p, pi) => {
-    const color = PLANT_COLORS[pi % PLANT_COLORS.length];
-    defs += `<linearGradient id="trendGrad${pi}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient>`;
-  });
-  defs += '</defs>';
-  paths = defs + paths;
+  const numPlants = plantsToShow.length;
+  // Calculate group width (max 70% of step, cap at 40px per plant)
+  const groupWidth = Math.min(stepX * 0.7, numPlants * 40); 
+  const barGap = numPlants > 1 ? 2 : 0;
+  const barW = Math.max(2, (groupWidth / numPlants) - barGap);
 
-  // Draw lines for each plant
-  plantsToShow.forEach((plant, pi) => {
-    const color = PLANT_COLORS[pi % PLANT_COLORS.length];
-    const avgs = plantAvgs[plant];
+  // Draw bars for each month
+  months.forEach((m, i) => {
+    const xBase = getX(i);
+    const groupStartX = xBase - (groupWidth / 2);
 
-    // Build line path (skip nulls)
-    let d = '';
-    let firstDrawn = true;
-    const drawnPoints = [];
-    months.forEach((m, i) => {
-      if (avgs[i] === null) return;
-      const x = getX(i);
-      const y = scaleY(avgs[i]);
-      d += (firstDrawn ? 'M' : 'L') + ` ${x} ${y} `;
-      firstDrawn = false;
-      drawnPoints.push({ x, y, val: avgs[i], month: m, idx: i });
-    });
+    plantsToShow.forEach((plant, pi) => {
+      const val = plantAvgs[plant][i];
+      if (val === null) return;
 
-    if (drawnPoints.length === 0) return;
+      const color = PLANT_COLORS[pi % PLANT_COLORS.length];
+      const x = groupStartX + pi * (barW + barGap);
+      const y = scaleY(val);
+      const yBase = scaleY(yMin);
+      const barH = Math.max(0, yBase - y);
 
-    // Area fill (only in single plant mode)
-    if (plantsToShow.length === 1 && drawnPoints.length > 1) {
-      let areaD = `M ${drawnPoints[0].x} ${drawnPoints[0].y} `;
-      drawnPoints.forEach(pt => { areaD += `L ${pt.x} ${pt.y} `; });
-      areaD += `L ${drawnPoints[drawnPoints.length-1].x} ${scaleY(yMin)} L ${drawnPoints[0].x} ${scaleY(yMin)} Z`;
-      paths += `<path d="${areaD}" fill="url(#trendGrad${pi})" opacity="0.2"/>`;
-    }
+      const isSelected = m === selectedMonth;
+      const opacity = isSelected ? 1 : 0.85;
 
-    // Line
-    paths += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${plantsToShow.length === 1 ? 3 : 2.5}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      paths += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="${color}" opacity="${opacity}"/>`;
 
-    // Points + value labels
-    drawnPoints.forEach(pt => {
-      const isSelected = pt.month === selectedMonth;
-      const r = isSelected ? 6 : 4;
-      paths += `<circle cx="${pt.x}" cy="${pt.y}" r="${r}" fill="${isSelected ? color : 'var(--surface)'}" stroke="${color}" stroke-width="2"/>`;
       // Show labels only in single-plant mode or if few plants
       if (plantsToShow.length <= 3) {
-        const labelOffset = pi * 14;
-        paths += `<text x="${pt.x}" y="${pt.y - 10 - labelOffset}" fill="${color}" font-size="10" text-anchor="middle" font-weight="700">${pt.val.toFixed(1)}</text>`;
+        paths += `<text x="${x + barW/2}" y="${y - 6}" fill="${color}" font-size="9" text-anchor="middle" font-weight="700">${val.toFixed(1)}</text>`;
       }
     });
   });

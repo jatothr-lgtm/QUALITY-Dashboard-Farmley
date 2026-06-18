@@ -23,10 +23,10 @@ const RAW_DATA = [
 ];
 
 const BENCHMARKS = {
-  gmp:          { target:90,  weight:0.25, label:"GMP %",                    higher:true,  unit:"%" },
-  complaintRate:{ target:15,  weight:0.20, label:"Complaint Rate / Mn Packs", higher:false, unit:""  },
-  rmir:         { target:5,   weight:0.20, label:"RM Inward Rejection %",    higher:false, unit:"%" },
-  rmad:         { target:2,   weight:0.10, label:"RM Acceptance Deviation %", higher:false, unit:"%" },
+  gmp:          { target:90,  weight:0.40, label:"GMP %",                    higher:true,  unit:"%" },
+  complaintRate:{ target:5,   weight:0.25, label:"Complaint Rate / Mn Packs", higher:false, unit:""  },
+  rmir:         { target:5,   weight:0.05, label:"RM Inward Rejection %",    higher:false, unit:"%" },
+  rmad:         { target:2,   weight:0.05, label:"RM Acceptance Deviation %", higher:false, unit:"%" },
   training:     { target:100, weight:0.25, label:"Training Conducted %",     higher:true,  unit:"%" },
   qualityScore: { target:70,  weight:1,    label:"Quality Score",            higher:true,  unit:"pts" }
 };
@@ -771,7 +771,7 @@ async function fetchFromSheet() {
     if (dataArr && Array.isArray(dataArr) && dataArr.length > 0) {
       console.log('[Dashboard] Loaded', dataArr.length, 'records.');
 
-      // Normalize data - ensure all expected fields exist & recalculate quality score
+      // Normalize data - ensure all expected fields exist
       const normalized = dataArr.map(d => {
         const row = {
           plant:         String(d.plant || '').trim(),
@@ -786,7 +786,7 @@ async function fetchFromSheet() {
           year:          String(d.year || '').trim()
         };
 
-        // Recalculate Quality Score dynamically based on new BENCHMARKS
+        // Recalculate Quality Score dynamically based on hardcoded BENCHMARKS parameters
         let qs = 0;
         ["gmp", "complaintRate", "rmir", "rmad", "training"].forEach(k => {
           const b = BENCHMARKS[k];

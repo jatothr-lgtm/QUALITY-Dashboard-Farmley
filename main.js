@@ -196,21 +196,21 @@ function renderKPIOverview() {
   const avgTrain = avg(filteredData, "training");
 
   const tiles = [
-    { label:"Avg Quality Score", value: avgScore.toFixed(1), unit:"pts", target:"Target: 70+",
-      delta: avgScore >= 70 ? "▲ On Track" : "▼ Below Target",
-      cls: avgScore >= 70 ? "delta-good" : "delta-bad", color: scoreColor(avgScore) },
-    { label:"Avg GMP %", value: avgGMP.toFixed(1), unit:"%", target:"Target: 90%",
-      delta: avgGMP >= 90 ? "✓ At Target" : `▼ ${(90-avgGMP).toFixed(1)}% gap`,
-      cls: avgGMP >= 90 ? "delta-good" : avgGMP >= 80 ? "delta-warn" : "delta-bad", color: avgGMP >= 90 ? "var(--excellent)" : "var(--warn)" },
-    { label:"Avg Complaint Rate", value: avgCmp.toFixed(1), unit:"/Mn", target:"Target: ≤15",
-      delta: avgCmp <= 15 ? "✓ In Control" : `▲ ${(avgCmp-15).toFixed(1)} over`,
-      cls: avgCmp <= 15 ? "delta-good" : "delta-warn", color: avgCmp <= 15 ? "var(--excellent)" : "var(--warn)" },
-    { label:"Avg RM Inward Rej %", value: avgRMIR.toFixed(1), unit:"%", target:"Target: ≤5%",
-      delta: avgRMIR <= 5 ? "✓ In Control" : "▲ High",
-      cls: avgRMIR <= 5 ? "delta-good" : "delta-bad", color: avgRMIR <= 5 ? "var(--excellent)" : "var(--danger)" },
-    { label:"Avg Training %", value: avgTrain.toFixed(0), unit:"%", target:"Target: 100%",
-      delta: avgTrain === 100 ? "✓ Complete" : `▼ ${(100-avgTrain).toFixed(0)}% gap`,
-      cls: avgTrain === 100 ? "delta-good" : avgTrain >= 70 ? "delta-warn" : "delta-bad", color: avgTrain === 100 ? "var(--excellent)" : "var(--warn)" },
+    { label:"Avg Quality Score", value: avgScore.toFixed(1), unit:"pts", target:"Target: "+BENCHMARKS.qualityScore.target+"+",
+      delta: avgScore >= BENCHMARKS.qualityScore.target ? "▲ On Track" : "▼ Below Target",
+      cls: avgScore >= BENCHMARKS.qualityScore.target ? "delta-good" : "delta-bad", color: scoreColor(avgScore) },
+    { label:"Avg GMP %", value: avgGMP.toFixed(1), unit:"%", target:"Target: "+BENCHMARKS.gmp.target+"%",
+      delta: avgGMP >= BENCHMARKS.gmp.target ? "✓ At Target" : "▼ "+(BENCHMARKS.gmp.target-avgGMP).toFixed(1)+"% gap",
+      cls: avgGMP >= BENCHMARKS.gmp.target ? "delta-good" : avgGMP >= (BENCHMARKS.gmp.target * 0.9) ? "delta-warn" : "delta-bad", color: avgGMP >= BENCHMARKS.gmp.target ? "var(--excellent)" : "var(--warn)" },
+    { label:"Avg Complaint Rate", value: avgCmp.toFixed(1), unit:"/Mn", target:"Target: ≤"+BENCHMARKS.complaintRate.target,
+      delta: avgCmp <= BENCHMARKS.complaintRate.target ? "✓ In Control" : "▲ "+(avgCmp-BENCHMARKS.complaintRate.target).toFixed(1)+" over",
+      cls: avgCmp <= BENCHMARKS.complaintRate.target ? "delta-good" : "delta-warn", color: avgCmp <= BENCHMARKS.complaintRate.target ? "var(--excellent)" : "var(--warn)" },
+    { label:"Avg RM Inward Rej %", value: avgRMIR.toFixed(1), unit:"%", target:"Target: ≤"+BENCHMARKS.rmir.target+"%",
+      delta: avgRMIR <= BENCHMARKS.rmir.target ? "✓ In Control" : "▲ High",
+      cls: avgRMIR <= BENCHMARKS.rmir.target ? "delta-good" : "delta-bad", color: avgRMIR <= BENCHMARKS.rmir.target ? "var(--excellent)" : "var(--danger)" },
+    { label:"Avg Training %", value: avgTrain.toFixed(0), unit:"%", target:"Target: "+BENCHMARKS.training.target+"%",
+      delta: avgTrain >= BENCHMARKS.training.target ? "✓ Complete" : "▼ "+(BENCHMARKS.training.target-avgTrain).toFixed(0)+"% gap",
+      cls: avgTrain >= BENCHMARKS.training.target ? "delta-good" : avgTrain >= (BENCHMARKS.training.target * 0.7) ? "delta-warn" : "delta-bad", color: avgTrain >= BENCHMARKS.training.target ? "var(--excellent)" : "var(--warn)" },
   ];
 
   el.innerHTML = tiles.map(t => `
@@ -230,10 +230,10 @@ function renderRankings() {
 
   el.innerHTML = sorted.map((r, i) => {
     const rank = i + 1;
-    const gmpSt  = kpiStatus(r.gmp, 90, true);
-    const cmpSt  = kpiStatus(r.complaintRate, 15, false);
-    const rmirSt = kpiStatus(r.rmir, 5, false);
-    const trainSt = kpiStatus(r.training, 100, true);
+    const gmpSt  = kpiStatus(r.gmp, BENCHMARKS.gmp.target, true);
+    const cmpSt  = kpiStatus(r.complaintRate, BENCHMARKS.complaintRate.target, false);
+    const rmirSt = kpiStatus(r.rmir, BENCHMARKS.rmir.target, false);
+    const trainSt = kpiStatus(r.training, BENCHMARKS.training.target, true);
     const pct = (r.qualityScore / 100 * 100).toFixed(0);
     const color = scoreColor(r.qualityScore);
     const rankCls = rank <= 3 ? `rank-${rank}` : 'rank-4';
@@ -275,11 +275,11 @@ function renderTargetVsActual() {
   const el = document.getElementById("target-vs-actual");
   if (!el) return;
   const kpis = [
-    { key:"gmp",          label:"GMP %",                target:90,  higher:true,  color:"#3b82f6" },
-    { key:"complaintRate",label:"Complaint Rate /Mn",   target:15,  higher:false, color:"#f97316" },
-    { key:"rmir",         label:"RM Inward Rejection %",target:5,   higher:false, color:"#ef4444" },
-    { key:"rmad",         label:"RM Acceptance Dev %",  target:2,   higher:false, color:"#8b5cf6" },
-    { key:"training",     label:"Training %",            target:100, higher:true,  color:"#10b981" },
+    { key:"gmp",          label:"GMP %",                target:BENCHMARKS.gmp.target,  higher:true,  color:"#3b82f6" },
+    { key:"complaintRate",label:"Complaint Rate /Mn",   target:BENCHMARKS.complaintRate.target,  higher:false, color:"#f97316" },
+    { key:"rmir",         label:"RM Inward Rejection %",target:BENCHMARKS.rmir.target,   higher:false, color:"#ef4444" },
+    { key:"rmad",         label:"RM Acceptance Dev %",  target:BENCHMARKS.rmad.target,   higher:false, color:"#8b5cf6" },
+    { key:"training",     label:"Training %",            target:BENCHMARKS.training.target, higher:true,  color:"#10b981" },
   ];
 
   el.innerHTML = kpis.map(k => {
@@ -344,11 +344,11 @@ function renderHeatmap() {
   if (!el) return;
   const sorted = [...filteredData].sort((a,b)=>b.qualityScore-a.qualityScore);
   const kpis = [
-    { key:"gmp",           label:"GMP %",      target:90,  higher:true  },
-    { key:"complaintRate", label:"Complaint/Mn", target:15, higher:false },
-    { key:"rmir",          label:"RM Inward Rej %", target:5, higher:false },
-    { key:"rmad",          label:"RM Accept Dev %", target:2, higher:false },
-    { key:"training",      label:"Training %", target:100, higher:true  },
+    { key:"gmp",           label:"GMP %",      target:BENCHMARKS.gmp.target,  higher:true  },
+    { key:"complaintRate", label:"Complaint/Mn", target:BENCHMARKS.complaintRate.target, higher:false },
+    { key:"rmir",          label:"RM Inward Rej %", target:BENCHMARKS.rmir.target, higher:false },
+    { key:"rmad",          label:"RM Accept Dev %", target:BENCHMARKS.rmad.target, higher:false },
+    { key:"training",      label:"Training %", target:BENCHMARKS.training.target, higher:true  },
   ];
 
   let html = `<thead><tr>
@@ -359,7 +359,7 @@ function renderHeatmap() {
 
   sorted.forEach(r => {
     html += `<tr><td class="plant-name-cell">${r.plant}</td>`;
-    const sc = kpiStatus(r.qualityScore, 70, true);
+    const sc = kpiStatus(r.qualityScore, BENCHMARKS.qualityScore.target, true);
     html += `<td class="${cellClass(sc)}">${r.qualityScore.toFixed(1)}</td>`;
     kpis.forEach(k => {
       const st = kpiStatus(r[k.key], k.target, k.higher);
@@ -431,13 +431,13 @@ function renderDataTable() {
       <td style="font-weight:700">${r.plant}</td>
       <td style="color:var(--muted)">${r.month || ''}</td>
       <td style="color:var(--muted)">${r.year || ''}</td>
-      <td style="color:${r.gmp>=90?'var(--excellent)':'var(--danger)'}">${r.gmp}%</td>
+      <td style="color:${r.gmp>=BENCHMARKS.gmp.target?'var(--excellent)':'var(--danger)'}">${r.gmp}%</td>
       <td>${r.complaints}</td>
       <td>${r.unitsSold.toLocaleString()}</td>
-      <td style="color:${r.complaintRate<=15?'var(--excellent)':'var(--danger)'}">${typeof r.complaintRate === 'number' ? r.complaintRate.toFixed(2) : r.complaintRate}</td>
-      <td style="color:${r.rmir<=5?'var(--excellent)':'var(--danger)'}">${r.rmir}%</td>
-      <td style="color:${r.rmad<=2?'var(--excellent)':'var(--danger)'}">${r.rmad}%</td>
-      <td style="color:${r.training===100?'var(--excellent)':'var(--warn)'}">${r.training}%</td>
+      <td style="color:${r.complaintRate<=BENCHMARKS.complaintRate.target?'var(--excellent)':'var(--danger)'}">${typeof r.complaintRate === 'number' ? r.complaintRate.toFixed(2) : r.complaintRate}</td>
+      <td style="color:${r.rmir<=BENCHMARKS.rmir.target?'var(--excellent)':'var(--danger)'}">${r.rmir}%</td>
+      <td style="color:${r.rmad<=BENCHMARKS.rmad.target?'var(--excellent)':'var(--danger)'}">${r.rmad}%</td>
+      <td style="color:${r.training>=BENCHMARKS.training.target?'var(--excellent)':'var(--warn)'}">${r.training}%</td>
       <td style="font-weight:700;color:${scoreColor(r.qualityScore)}">${r.qualityScore.toFixed(2)}</td>
       <td><span class="pill" style="${pillColors[rc]}">${RATING_EMOJI[r.rating] || ''} ${r.rating}</span></td>
     </tr>`;
@@ -747,24 +747,73 @@ async function fetchFromSheet() {
 
     // The API returns { status, data, benchmarks, ratings }
     const dataArr = json.data;
-    if (dataArr && Array.isArray(dataArr) && dataArr.length > 0) {
-      console.log('[Dashboard] Loaded', dataArr.length, 'records. Sample:', JSON.stringify(dataArr[0]));
+    const benchArr = json.benchmarks;
+    
+    // Update BENCHMARKS dynamically
+    if (benchArr && Array.isArray(benchArr)) {
+      benchArr.forEach(b => {
+        let key = null;
+        const kpi = String(b.kpi).toLowerCase();
+        if (kpi.includes("gmp")) key = "gmp";
+        else if (kpi.includes("complaint rate") || kpi.includes("complaint")) key = "complaintRate";
+        else if (kpi.includes("inward") || kpi.includes("rmir")) key = "rmir";
+        else if (kpi.includes("acceptance") || kpi.includes("deviation") || kpi.includes("rmad")) key = "rmad";
+        else if (kpi.includes("training")) key = "training";
+        
+        if (key && BENCHMARKS[key]) {
+           BENCHMARKS[key].target = parseFloat(b.target) || BENCHMARKS[key].target;
+           const w = parseFloat(b.weightage) || 0;
+           BENCHMARKS[key].weight = (w > 1) ? w / 100 : w;
+        }
+      });
+    }
 
-      // Normalize data - ensure all expected fields exist
-      const normalized = dataArr.map(d => ({
-        plant:         String(d.plant || '').trim(),
-        gmp:           parseFloat(d.gmp) || 0,
-        complaints:    parseInt(d.complaints) || 0,
-        rmir:          parseFloat(d.rmir) || 0,
-        rmad:          parseFloat(d.rmad) || 0,
-        training:      parseFloat(d.training) || 0,
-        unitsSold:     parseInt(d.unitsSold) || 0,
-        complaintRate: parseFloat(d.complaintRate) || 0,
-        qualityScore:  parseFloat(d.qualityScore) || 0,
-        rating:        String(d.rating || 'Fair').trim(),
-        month:         String(d.month || '').trim(),
-        year:          String(d.year || '').trim()
-      })).filter(d => d.plant.length > 0);
+    if (dataArr && Array.isArray(dataArr) && dataArr.length > 0) {
+      console.log('[Dashboard] Loaded', dataArr.length, 'records.');
+
+      // Normalize data - ensure all expected fields exist & recalculate quality score
+      const normalized = dataArr.map(d => {
+        const row = {
+          plant:         String(d.plant || '').trim(),
+          gmp:           parseFloat(d.gmp) || 0,
+          complaints:    parseInt(d.complaints) || 0,
+          rmir:          parseFloat(d.rmir) || 0,
+          rmad:          parseFloat(d.rmad) || 0,
+          training:      parseFloat(d.training) || 0,
+          unitsSold:     parseInt(d.unitsSold) || 0,
+          complaintRate: parseFloat(d.complaintRate) || 0,
+          month:         String(d.month || '').trim(),
+          year:          String(d.year || '').trim()
+        };
+
+        // Recalculate Quality Score dynamically based on new BENCHMARKS
+        let qs = 0;
+        ["gmp", "complaintRate", "rmir", "rmad", "training"].forEach(k => {
+          const b = BENCHMARKS[k];
+          const val = row[k];
+          let kpiScore = 0;
+          if (b.higher) {
+            kpiScore = (b.target > 0) ? (val / b.target) * 100 : 0;
+          } else {
+            if (val <= b.target) kpiScore = 100;
+            else kpiScore = (b.target / val) * 100;
+          }
+          if (kpiScore > 100) kpiScore = 100;
+          if (kpiScore < 0) kpiScore = 0;
+          qs += (kpiScore * b.weight);
+        });
+        
+        row.qualityScore = qs;
+
+        // Recalculate Rating based on new QS
+        if (qs >= 90) row.rating = "Excellent";
+        else if (qs >= 80) row.rating = "Very Good";
+        else if (qs >= 70) row.rating = "Good";
+        else if (qs >= 60) row.rating = "Fair";
+        else row.rating = "Poor";
+
+        return row;
+      }).filter(d => d.plant.length > 0);
 
       console.log('[Dashboard] Normalized', normalized.length, 'records');
       console.log('[Dashboard] Months found:', [...new Set(normalized.map(r => `${r.month} ${r.year}`))]);

@@ -749,25 +749,6 @@ async function fetchFromSheet() {
     const dataArr = json.data;
     const benchArr = json.benchmarks;
     
-    // Update BENCHMARKS dynamically
-    if (benchArr && Array.isArray(benchArr)) {
-      benchArr.forEach(b => {
-        let key = null;
-        const kpi = String(b.kpi).toLowerCase();
-        if (kpi.includes("gmp")) key = "gmp";
-        else if (kpi.includes("complaint rate") || kpi.includes("complaint")) key = "complaintRate";
-        else if (kpi.includes("inward") || kpi.includes("rmir")) key = "rmir";
-        else if (kpi.includes("acceptance") || kpi.includes("deviation") || kpi.includes("rmad")) key = "rmad";
-        else if (kpi.includes("training")) key = "training";
-        
-        if (key && BENCHMARKS[key]) {
-           BENCHMARKS[key].target = parseFloat(b.target) || BENCHMARKS[key].target;
-           const w = parseFloat(b.weightage) || 0;
-           BENCHMARKS[key].weight = (w > 1) ? w / 100 : w;
-        }
-      });
-    }
-
     if (dataArr && Array.isArray(dataArr) && dataArr.length > 0) {
       console.log('[Dashboard] Loaded', dataArr.length, 'records.');
 

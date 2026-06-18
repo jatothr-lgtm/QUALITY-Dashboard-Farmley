@@ -5,21 +5,21 @@ const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
 
 // Mock data as fallback (includes month/year)
 const RAW_DATA = [
-  { plant:"Indore",  gmp:89.6, complaints:40, rmir:21.52, rmad:3.36, training:100, unitsSold:3279891, complaintRate:12.2,  qualityScore:75.199, rating:"Good", month:"March", year:"2026" },
+  { plant:"Indore",  gmp:89.6, complaints:40, rmir:21.52, rmad:3.36, training:100, unitsSold:3279891, complaintRate:12.20, qualityScore:75.199, rating:"Good", month:"March", year:"2026" },
   { plant:"Purnia",  gmp:85.2, complaints:8,  rmir:0,     rmad:0,    training:50,  unitsSold:1331555, complaintRate:6.01,  qualityScore:65.002, rating:"Fair", month:"March", year:"2026" },
   { plant:"Kundli",  gmp:80,   complaints:0,  rmir:3,     rmad:1.5,  training:50,  unitsSold:0,       complaintRate:0,     qualityScore:61.75,  rating:"Fair", month:"March", year:"2026" },
-  { plant:"UD",      gmp:67.4, complaints:4,  rmir:0,     rmad:0,    training:50,  unitsSold:769160,  complaintRate:5.2,   qualityScore:60.390, rating:"Fair", month:"March", year:"2026" },
+  { plant:"UD",      gmp:67.4, complaints:4,  rmir:0,     rmad:0,    training:50,  unitsSold:769160,  complaintRate:5.20,  qualityScore:60.390, rating:"Fair", month:"March", year:"2026" },
   { plant:"Functional", gmp:85.2, complaints:0, rmir:0,   rmad:0,    training:50,  unitsSold:49320,   complaintRate:0,     qualityScore:63.8,   rating:"Fair", month:"March", year:"2026" },
   { plant:"Indore",  gmp:84.4, complaints:31, rmir:34.3, rmad:3.98, training:60, unitsSold:3867177, complaintRate:8.02, qualityScore:60.445, rating:"Fair", month:"April", year:"2026" },
   { plant:"Purnia",  gmp:81.8, complaints:14, rmir:0, rmad:0, training:100, unitsSold:1779823, complaintRate:7.87, qualityScore:77.023, rating:"Good", month:"April", year:"2026" },
   { plant:"Kundli",  gmp:85.2, complaints:0,  rmir:1.36, rmad:48.43, training:100, unitsSold:8140, complaintRate:0, qualityScore:71.185, rating:"Good", month:"April", year:"2026" },
   { plant:"UD",      gmp:59,   complaints:3,  rmir:0, rmad:0, training:50, unitsSold:815385, complaintRate:3.68, qualityScore:57.986, rating:"Poor", month:"April", year:"2026" },
   { plant:"Functional", gmp:90.7, complaints:0, rmir:0, rmad:0, training:100, unitsSold:38640, complaintRate:0, qualityScore:77.675, rating:"Good", month:"April", year:"2026" },
-  { plant:"Indore",  gmp:76.2, complaints:44, rmir:28.48, rmad:1.13, training:100, unitsSold:4420132, complaintRate:9.95, qualityScore:70.232, rating:"Good", month:"May", year:"2026" },
-  { plant:"Purnia",  gmp:82.4, complaints:8, rmir:0, rmad:0, training:100, unitsSold:1293468, complaintRate:6.18, qualityScore:76.837, rating:"Good", month:"May", year:"2026" },
-  { plant:"Kundli",  gmp:91.2, complaints:2, rmir:27.22, rmad:7.45, training:100, unitsSold:539366, complaintRate:3.71, qualityScore:72.353, rating:"Good", month:"May", year:"2026" },
-  { plant:"UD",      gmp:0, complaints:1, rmir:0, rmad:1, training:100, unitsSold:815884, complaintRate:1.23, qualityScore:55.145, rating:"Poor", month:"May", year:"2026" },
-  { plant:"Functional", gmp:94.5, complaints:1, rmir:0, rmad:0, training:100, unitsSold:240129, complaintRate:4.16, qualityScore:79.458, rating:"Good", month:"May", year:"2026" }
+  { plant:"Indore",  gmp:76.2, complaints:44, rmir:28.48, rmad:1.13, training:100, unitsSold:4420132, complaintRate:9.95, qualityScore:87.2, rating:"Very Good", month:"May", year:"2026" },
+  { plant:"Purnia",  gmp:82.4, complaints:8, rmir:0, rmad:0, training:100, unitsSold:1293468, complaintRate:6.18, qualityScore:97.5, rating:"Excellent", month:"May", year:"2026" },
+  { plant:"Kundli",  gmp:91.2, complaints:2, rmir:27.22, rmad:7.45, training:100, unitsSold:539366, complaintRate:3.71, qualityScore:84.5, rating:"Very Good", month:"May", year:"2026" },
+  { plant:"UD",      gmp:74.7, complaints:1, rmir:0, rmad:7.66, training:100, unitsSold:815884, complaintRate:1.23, qualityScore:87.51, rating:"Very Good", month:"May", year:"2026" },
+  { plant:"Functional", gmp:94.5, complaints:1, rmir:0, rmad:0, training:100, unitsSold:240129, complaintRate:4.16, qualityScore:100, rating:"Excellent", month:"May", year:"2026" }
 ];
 
 const BENCHMARKS = {
@@ -754,7 +754,7 @@ async function fetchFromSheet() {
 
       // Normalize data - ensure all expected fields exist
       const normalized = dataArr.map(d => {
-        const row = {
+        return {
           plant:         String(d.plant || '').trim(),
           gmp:           parseFloat(d.gmp) || 0,
           complaints:    parseInt(d.complaints) || 0,
@@ -763,37 +763,11 @@ async function fetchFromSheet() {
           training:      parseFloat(d.training) || 0,
           unitsSold:     parseInt(d.unitsSold) || 0,
           complaintRate: parseFloat(d.complaintRate) || 0,
+          qualityScore:  parseFloat(d.qualityScore) || 0,
+          rating:        String(d.rating || 'Fair').trim(),
           month:         String(d.month || '').trim(),
           year:          String(d.year || '').trim()
         };
-
-        // Recalculate Quality Score dynamically based on hardcoded BENCHMARKS parameters
-        let qs = 0;
-        ["gmp", "complaintRate", "rmir", "rmad", "training"].forEach(k => {
-          const b = BENCHMARKS[k];
-          const val = row[k];
-          let kpiScore = 0;
-          if (b.higher) {
-            kpiScore = (b.target > 0) ? (val / b.target) * 100 : 0;
-          } else {
-            if (val <= b.target) kpiScore = 100;
-            else kpiScore = (b.target / val) * 100;
-          }
-          if (kpiScore > 100) kpiScore = 100;
-          if (kpiScore < 0) kpiScore = 0;
-          qs += (kpiScore * b.weight);
-        });
-        
-        row.qualityScore = qs;
-
-        // Recalculate Rating based on new QS
-        if (qs >= 90) row.rating = "Excellent";
-        else if (qs >= 80) row.rating = "Very Good";
-        else if (qs >= 70) row.rating = "Good";
-        else if (qs >= 60) row.rating = "Fair";
-        else row.rating = "Poor";
-
-        return row;
       }).filter(d => d.plant.length > 0);
 
       console.log('[Dashboard] Normalized', normalized.length, 'records');

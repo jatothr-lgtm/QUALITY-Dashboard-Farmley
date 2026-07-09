@@ -41,6 +41,8 @@ const MONTH_ORDER = { January:1, February:2, March:3, April:4, May:5, June:6, Ju
 
 let selectedMonth = null; // Will be set to latest month on init
 let filteredData = [];
+let hasLoadedFromSheet = false; // First live load jumps to latest month; later refreshes keep the user's selection
+let lastDataSnapshot = "";      // Used to skip re-rendering when sheet data hasn't changed
 
 /* =====================================================================
    UTILITY
@@ -713,16 +715,13 @@ async function fetchFromSheet() {
   try {
     // Google Apps Script does a 302 redirect. We must follow it.
     // Adding a cache buster to ensure we get fresh data every time.
+    // NOTE: no custom headers here — Cache-Control/Pragma trigger a CORS
+    // preflight that Apps Script cannot answer, which fails the whole fetch.
     const cacheBusterUrl = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 't=' + Date.now();
     const response = await fetch(cacheBusterUrl, {
       method: 'GET',
       redirect: 'follow',
-      cache: 'no-store',
-      headers: { 
-        'Accept': 'application/json',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
+      cache: 'no-store'
     });
 
     console.log('[Dashboard] Response status:', response.status, response.ok);
@@ -773,11 +772,27 @@ async function fetchFromSheet() {
       console.log('[Dashboard] Normalized', normalized.length, 'records');
       console.log('[Dashboard] Months found:', [...new Set(normalized.map(r => `${r.month} ${r.year}`))]);
 
+      // Always show that polling is alive
+      document.getElementById("refresh-time").textContent = new Date().toLocaleTimeString();
+
+      // Skip re-render if the sheet data hasn't actually changed
+      const snapshot = JSON.stringify(normalized);
+      if (snapshot === lastDataSnapshot) {
+        console.log('[Dashboard] Sheet data unchanged — skipping re-render.');
+        return;
+      }
+      lastDataSnapshot = snapshot;
+
       RAW_DATA.length = 0;
       normalized.forEach(d => RAW_DATA.push(d));
-      
-      // Reset selectedMonth so it gets re-detected as latest
-      selectedMonth = null;
+
+      // First live load: jump to the latest month. Subsequent refreshes
+      // keep the user's current selection (renderMonthPills falls back to
+      // the latest month automatically if the selection no longer exists).
+      if (!hasLoadedFromSheet) {
+        selectedMonth = null;
+        hasLoadedFromSheet = true;
+      }
       populateFilters();
       populateTrendPlantFilter();
       applyFilters();
@@ -822,6 +837,11 @@ document.addEventListener('DOMContentLoaded', () => {
   applyFilters();
   fetchFromSheet();
 
-  // Auto-refresh every 60 seconds
-  setInterval(fetchFromSheet, 60000);
+  // Auto-refresh every 30 seconds
+  setInterval(fetchFromSheet, 30000);
+
+  // Also refresh immediately when the user returns to the tab
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) fetchFromSheet();
+  });
 });

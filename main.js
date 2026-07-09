@@ -664,7 +664,9 @@ function renderParameterComparison() {
   if (plants.length === 0) { svg.innerHTML = `<text x="${W/2}" y="${H/2}" fill="#64748b" font-size="12" text-anchor="middle">No data</text>`; return; }
 
   const avgVals = plants.map(p => plantGroups[p].reduce((a,b)=>a+b,0)/plantGroups[p].length);
-  const targetVal = BENCHMARKS[key] ? BENCHMARKS[key].target : null;
+  // Quality Score shows no target line; bars are colored by the 80-point mark instead
+  const isQualityScore = key === "qualityScore";
+  const targetVal = (!isQualityScore && BENCHMARKS[key]) ? BENCHMARKS[key].target : null;
   const maxVal = Math.max(...avgVals, targetVal || 0) * 1.15 || 100;
   const scaleY = v => padT + chartH - (v / maxVal) * chartH;
 
@@ -696,7 +698,10 @@ function renderParameterComparison() {
     const barH = scaleY(0) - y;
 
     let color = barColors[i % barColors.length];
-    if (BENCHMARKS[key]) {
+    if (isQualityScore) {
+      // No target for Quality Score — color by the 80-point mark
+      color = avgVals[i] >= 80 ? "#10b981" : "#ef4444";
+    } else if (BENCHMARKS[key]) {
       const isGood = BENCHMARKS[key].higher ? avgVals[i] >= BENCHMARKS[key].target : avgVals[i] <= BENCHMARKS[key].target;
       color = isGood ? "#10b981" : "#ef4444";
     }

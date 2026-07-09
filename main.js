@@ -38,6 +38,28 @@ const RATING_EMOJI = { Excellent:"🥇", "Very Good":"🥈", Good:"🥉", Fair:"
 
 // Month ordering for correct chronological sort
 const MONTH_ORDER = { January:1, February:2, March:3, April:4, May:5, June:6, July:7, August:8, September:9, October:10, November:11, December:12 };
+const MONTH_NAMES = Object.keys(MONTH_ORDER);
+const MONTH_ABBREV = { Jan:"January", Feb:"February", Mar:"March", Apr:"April", May:"May", Jun:"June", Jul:"July", Aug:"August", Sep:"September", Sept:"September", Oct:"October", Nov:"November", Dec:"December" };
+
+// Accepts "June", "june", "JUN", "Jun.", a date string, etc. and returns
+// a clean { month: "June", year: "2026" } pair so new sheet rows always group correctly.
+function normalizeMonthYear(rawMonth, rawYear) {
+  let month = String(rawMonth || "").trim();
+  let year  = String(rawYear  || "").trim().replace(/\.0+$/, "");
+  if (month) {
+    const t = month.charAt(0).toUpperCase() + month.slice(1).toLowerCase().replace(/\./g, "");
+    if (MONTH_ORDER[t])       month = t;
+    else if (MONTH_ABBREV[t]) month = MONTH_ABBREV[t];
+    else {
+      const d = new Date(month);
+      if (!isNaN(d.getTime())) {
+        month = MONTH_NAMES[d.getMonth()];
+        if (!year) year = String(d.getFullYear());
+      }
+    }
+  }
+  return { month, year };
+}
 
 let selectedMonth = null; // Will be set to latest month on init
 let filteredData = [];
@@ -753,6 +775,7 @@ async function fetchFromSheet() {
 
       // Normalize data - ensure all expected fields exist
       const normalized = dataArr.map(d => {
+        const my = normalizeMonthYear(d.month, d.year);
         return {
           plant:         String(d.plant || '').trim(),
           gmp:           parseFloat(d.gmp) || 0,
@@ -764,8 +787,8 @@ async function fetchFromSheet() {
           complaintRate: parseFloat(d.complaintRate) || 0,
           qualityScore:  parseFloat(d.qualityScore) || 0,
           rating:        String(d.rating || 'Fair').trim(),
-          month:         String(d.month || '').trim(),
-          year:          String(d.year || '').trim()
+          month:         my.month,
+          year:          my.year
         };
       }).filter(d => d.plant.length > 0);
 

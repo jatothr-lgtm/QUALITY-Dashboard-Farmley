@@ -18,6 +18,8 @@ const SHEET_NAMES = {
   rating: "Rating"
 };
 
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
 // ── WEB APP ENTRY POINT ──────────────────────────────────────
 function doGet(e) {
   let result;
@@ -97,8 +99,24 @@ function getPerformanceData() {
     var complaintRate = parseFloat(row[idx.complaintRate]) || 0;
     var qualityScore = parseFloat(row[idx.qualityScore]) || 0;
     var rating       = String(row[idx.rating] || "").trim();
-    var month        = String(row[idx.month] || "").trim();
     var year         = String(row[idx.year] || "").trim();
+
+    // Month cell may be a real date (e.g. 01-Jun-2026 displayed as "June")
+    // or text in any casing ("june", "JUN"). Normalize to "June" style.
+    var month = row[idx.month];
+    if (Object.prototype.toString.call(month) === "[object Date]") {
+      if (!year) year = String(month.getFullYear());
+      month = MONTH_NAMES[month.getMonth()];
+    } else {
+      month = String(month || "").trim();
+      var t = month.charAt(0).toUpperCase() + month.slice(1).toLowerCase().replace(/\./g, "");
+      for (var m = 0; m < MONTH_NAMES.length; m++) {
+        if (MONTH_NAMES[m] === t || MONTH_NAMES[m].substring(0, 3) === t.substring(0, 3) && t.length >= 3) {
+          month = MONTH_NAMES[m];
+          break;
+        }
+      }
+    }
 
     // If year looks like a number like 2026.0, clean it
     if (year.indexOf(".") !== -1) {
